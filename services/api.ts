@@ -498,14 +498,129 @@ export const FarmService = {
   },
 };
 
+// Helper to normalize Cow data from API
+const normalizeCow = (
+  cow: any,
+  pregnantCowIds?: Set<string>,
+  sickCowIds?: Set<string>
+): Cow => {
+  let status: "Healthy" | "Sick" | "Pregnant" | "Lactating" = "Healthy";
+
+  // Ensure ID is a string for lookup
+  const cowIdStr = cow.id ? String(cow.id) : "";
+
+  // Priority: Sick > Pregnant > Lactating > Healthy
+
+  const statuses: string[] = [];
+
+  // 1. Check Sickness
+  if (
+    (sickCowIds && cowIdStr && sickCowIds.has(cowIdStr)) ||
+    (cow.gynecological_status_name &&
+      (cow.gynecological_status_name.toLowerCase().includes("sick") ||
+        cow.gynecological_status_name.toLowerCase().includes("ill")))
+  ) {
+    statuses.push("Sick");
+  }
+
+  // 2. Check Pregnancy
+  if (
+    (pregnantCowIds && cowIdStr && pregnantCowIds.has(cowIdStr)) ||
+    cow.is_cow_pregnant === true ||
+    (cow.gynecological_status_name &&
+      cow.gynecological_status_name.toLowerCase().includes("pregnant"))
+  ) {
+    statuses.push("Pregnant");
+  }
+
+  // 3. Check Lactation
+  if (Number(cow.average_daily_milk) > 0) {
+    statuses.push("Lactating");
+  }
+
+  // Determine Primary Status (Priority: Sick > Pregnant > Lactating > Healthy)
+  if (statuses.includes("Sick")) status = "Sick";
+  else if (statuses.includes("Pregnant")) status = "Pregnant";
+  else if (statuses.includes("Lactating")) status = "Lactating";
+  else status = "Healthy";
+
+  return {
+    ...cow,
+    status: cow.status || status,
+    statuses: statuses.length > 0 ? statuses : ["Healthy"],
+  };
+};
+
 export const CowService = {
   getAll: async (): Promise<Cow[]> => {
     if (isDemo)
       return new Promise((resolve) =>
         setTimeout(() => resolve([...MOCK_COWS]), 800)
       );
-    // Use fetchAllPages to get ALL cows for client-side filtering and accurate counts
-    return fetchAllPages<Cow>("/cows/");
+
+    try {
+      // Fetch Cows, Repro Records, AND Medical Assessments in parallel
+      const [cows, reproRecords, medicalRecords] = await Promise.all([
+        fetchAllPages<Cow>("/cows/"),
+        fetchAllPages<any>("/reproduction/"),
+        fetchAllPages<any>("/medical-assessments/"),
+      ]);
+
+      // 1. Process Pregnancy (Latest Record per Cow)
+      const latestReproByCow = new Map<string, any>();
+      reproRecords.forEach((record: any) => {
+        if (!record.cow) return;
+        // Handle both ID and object cases for record.cow
+        const recordCowId =
+          typeof record.cow === "object"
+            ? String(record.cow.id)
+            : String(record.cow);
+
+        const existing = latestReproByCow.get(recordCowId);
+        // Assuming higher ID means newer
+        if (!existing || record.id > existing.id) {
+          latestReproByCow.set(recordCowId, record);
+        }
+      });
+
+      const pregnantCowIds = new Set<string>();
+      latestReproByCow.forEach((record, cowId) => {
+        if (record.is_cow_pregnant === true) {
+          pregnantCowIds.add(cowId);
+        }
+      });
+
+      // 2. Process Sickness (Latest Record per Cow from Medical Assessments ONLY)
+      const sickCowIds = new Set<string>();
+
+      // A. Check Medical Assessments
+      const latestMedicalByCow = new Map<string, any>();
+      medicalRecords.forEach((record: any) => {
+        if (!record.cow) return;
+        const recordCowId =
+          typeof record.cow === "object"
+            ? String(record.cow.id)
+            : String(record.cow);
+
+        const existing = latestMedicalByCow.get(recordCowId);
+        if (!existing || record.id > existing.id) {
+          latestMedicalByCow.set(recordCowId, record);
+        }
+      });
+      latestMedicalByCow.forEach((record, cowId) => {
+        if (record.is_cow_sick === true) {
+          sickCowIds.add(cowId);
+        }
+      });
+
+      // Normalize cows with the computed data
+      return cows.map((cow) => normalizeCow(cow, pregnantCowIds, sickCowIds));
+    } catch (error) {
+      console.error("Error fetching cow data:", error);
+      // Fallback
+      const cows = await fetchAllPages<Cow>("/cows/");
+      return cows.map((c) => normalizeCow(c, undefined, undefined));
+    }
   },
 
   getOne: async (id: string): Promise<Cow> => {
@@ -518,21 +633,67 @@ export const CowService = {
         : Promise.reject(new Error("Cow not found"));
     }
 
-    // Always try searching by cow_id first since we use cow_id in URLs
     try {
       const response = await api.get(`/cows/`, { params: { search: id } });
       const results = response.data.results || [];
-      // Find exact match to avoid partial matches
       const cow = results.find((c: Cow) => c.cow_id === id);
-      if (cow) return cow;
+
+      if (cow && cow.id) {
+        try {
+          // Fetch latest status for this specific cow
+          const [reproRes, medicalRes] = await Promise.all([
+            api.get(`/reproduction/`, { params: { cow: cow.id } }),
+            api.get(`/medical-assessments/`, { params: { cow: cow.id } }),
+          ]);
+
+          const repros = resolveResponseData(reproRes);
+          const medicals = resolveResponseData(medicalRes);
+
+          // STRICTLY Filter by Cow ID to ensure we don't use global data if API ignores params
+          const targetCowId = String(cow.id);
+
+          const cowRepros = Array.isArray(repros)
+            ? repros.filter((r: any) => {
+                const rCowId =
+                  typeof r.cow === "object" ? String(r.cow.id) : String(r.cow);
+                return rCowId === targetCowId;
+              })
+            : [];
+          const cowMedicals = Array.isArray(medicals)
+            ? medicals.filter((r: any) => {
+                const rCowId =
+                  typeof r.cow === "object" ? String(r.cow.id) : String(r.cow);
+                return rCowId === targetCowId;
+              })
+            : [];
+
+          // Find latest Repro
+          const latestRepro = cowRepros.sort(
+            (a: any, b: any) => b.id - a.id
+          )[0];
+          const isPregnant = latestRepro?.is_cow_pregnant === true;
+
+          // Find latest Medical
+          const latestMedical = cowMedicals.sort(
+            (a: any, b: any) => b.id - a.id
+          )[0];
+          const isMedicalSick = latestMedical?.is_cow_sick === true;
+
+          const pregnantSet = isPregnant ? new Set([targetCowId]) : undefined;
+          const sickSet = isMedicalSick ? new Set([targetCowId]) : undefined;
+
+          return normalizeCow(cow, pregnantSet, sickSet);
+        } catch (e) {
+          return normalizeCow(cow, undefined, undefined);
+        }
+      }
     } catch (error) {
       console.warn(`Failed to find cow by cow_id: ${id}`, error);
     }
 
-    // Fallback: Try direct PK lookup
     try {
       const response = await api.get(`/cows/${id}/`);
-      return response.data;
+      return normalizeCow(response.data, undefined, undefined);
     } catch (error) {
       throw new Error(`Cow with ID ${id} not found`);
     }
@@ -544,7 +705,7 @@ export const CowService = {
       return new Promise((resolve) => setTimeout(() => resolve(newCow), 1000));
     }
     const response = await api.post("/cows/", data);
-    return response.data;
+    return normalizeCow(response.data);
   },
   getMedicalAssessmentsByCow: async (
     cowId: string

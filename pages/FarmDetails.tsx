@@ -24,6 +24,7 @@ import {
   Label,
   Input,
 } from "../components/ui";
+import { ViewAssessmentModal } from "../components/ViewAssessmentModal";
 import {
   ArrowLeft,
   MapPin,
@@ -235,164 +236,7 @@ const HealthDistributionChart = ({
   );
 };
 
-// --- View Assessment Modal ---
-const ViewAssessmentModal = ({
-  assessment,
-  onClose,
-}: {
-  assessment: MedicalAssessment | null;
-  onClose: () => void;
-}) => {
-  if (!assessment) return null;
-
-  return (
-    <Modal
-      isOpen={!!assessment}
-      onClose={onClose}
-      title="Medical Assessment Details"
-      className="max-w-2xl"
-    >
-      <div className="space-y-6">
-        <div className="flex justify-between items-start border-b border-slate-100 pb-4">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              {assessment.is_cow_sick ? (
-                <AlertTriangle className="text-rose-500 h-5 w-5" />
-              ) : (
-                <CheckCircle2 className="text-emerald-500 h-5 w-5" />
-              )}
-              Cow:{" "}
-              {typeof assessment.cow === "string"
-                ? assessment.cow
-                : (assessment.cow as any).cow_id}
-            </h3>
-            <p className="text-sm text-slate-500 mt-1">
-              Assessment Date:{" "}
-              {new Date(assessment.assessment_date).toLocaleDateString()}
-            </p>
-          </div>
-          <Badge variant={assessment.is_cow_sick ? "danger" : "success"}>
-            {assessment.is_cow_sick ? "Sick" : "Healthy"}
-          </Badge>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-4">
-            <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">
-              Clinical Findings
-            </h4>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <span className="text-slate-500 block">General Health</span>
-                {typeof assessment.general_health === "object"
-                  ? assessment.general_health.name
-                  : assessment.general_health}
-              </div>
-              <div>
-                <span className="text-slate-500 block">Udder Health</span>
-                {typeof assessment.udder_health === "object"
-                  ? assessment.udder_health.name
-                  : assessment.udder_health}
-              </div>
-              <div>
-                <span className="text-slate-500 block">Mastitis</span>
-                {typeof assessment.mastitis === "object"
-                  ? assessment.mastitis.name
-                  : assessment.mastitis}
-              </div>
-              <div>
-                <span className="text-slate-500 block">Lameness</span>
-                {assessment.has_lameness ? (
-                  <span className="text-rose-500">Yes</span>
-                ) : (
-                  "No"
-                )}
-              </div>
-              <div>
-                <span className="text-slate-500 block">BCS</span>
-                <span className="font-bold">
-                  {assessment.body_condition_score}
-                </span>
-                /5
-              </div>
-              {assessment.sickness_type && (
-                <div>
-                  <span className="text-slate-500 block">Sickness Type</span>
-                  <span className="capitalize">
-                    {assessment.sickness_type.replace("_", " ")}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            <h4 className="text-sm font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 pb-2">
-              Treatments
-            </h4>
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between">
-                <span className="text-slate-500">Vaccinated?</span>
-                <span>
-                  {assessment.is_cow_vaccinated
-                    ? `Yes (${assessment.vaccination_type})`
-                    : "No"}
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-slate-500">Dewormed?</span>
-                <span>
-                  {assessment.has_deworming
-                    ? `Yes (${assessment.deworming_type})`
-                    : "No"}
-                </span>
-              </div>
-              {assessment.diagnosis && (
-                <div className="bg-slate-50 p-3 rounded-lg">
-                  <span className="text-slate-500 block text-xs font-bold mb-1">
-                    DIAGNOSIS
-                  </span>
-                  {assessment.diagnosis}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {(assessment.treatment ||
-          assessment.prescription ||
-          assessment.notes) && (
-          <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-900">
-            <h4 className="text-sm font-bold text-blue-700 dark:text-blue-300 mb-2 flex items-center gap-2">
-              <ClipboardList className="h-4 w-4" /> Medical Notes & Prescription
-            </h4>
-            <div className="space-y-2 text-sm text-slate-700 dark:text-slate-300">
-              {assessment.treatment && (
-                <p>
-                  <strong>Treatment:</strong> {assessment.treatment}
-                </p>
-              )}
-              {assessment.prescription && (
-                <p>
-                  <strong>Rx:</strong> {assessment.prescription}
-                </p>
-              )}
-              {assessment.notes && (
-                <p>
-                  <strong>Notes:</strong> {assessment.notes}
-                </p>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="flex justify-end pt-4">
-          <Button onClick={onClose}>Close Record</Button>
-        </div>
-      </div>
-    </Modal>
-  );
-};
+// --- Main Component ---
 
 // --- Main Component ---
 
@@ -438,11 +282,23 @@ export default function FarmDetails() {
     queryKey: ["cows", id],
     queryFn: CowService.getAll,
     select: (allCows) =>
-      allCows.filter((c) =>
-        typeof c.farm === "string"
-          ? c.farm === id
-          : (c.farm as any).farm_id === id
-      ),
+      allCows.filter((c) => {
+        const targetId = String(id);
+        // Check direct farm field (string or number)
+        if (String(c.farm) === targetId) return true;
+
+        // Check if farm is object
+        if (typeof c.farm === "object") {
+          if (String((c.farm as any).farm_id) === targetId) return true;
+          if (String((c.farm as any).id) === targetId) return true;
+        }
+
+        // Check if cow has a flattened farm_id field (as seen in API response)
+        if ((c as any).farm_id && String((c as any).farm_id) === targetId)
+          return true;
+
+        return false;
+      }),
   });
 
   // Filter and Pagination Logic for Cows Tab
@@ -1522,11 +1378,15 @@ export default function FarmDetails() {
                             <td className="px-6 py-4 font-medium">
                               {typeof record.cow === "string"
                                 ? record.cow
-                                : (record.cow as any).cow_id || "Unknown"}
+                                : (record.cow as any).cow_id ||
+                                  (record.cow as any).id ||
+                                  "Unknown"}
                             </td>
                             <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
                               {typeof record.assessed_by === "number"
-                                ? `ID: ${record.assessed_by}`
+                                ? doctors?.find(
+                                    (d) => d.id === record.assessed_by
+                                  )?.name || `ID: ${record.assessed_by}`
                                 : (record.assessed_by as StaffMember).name}
                             </td>
                             <td className="px-6 py-4">

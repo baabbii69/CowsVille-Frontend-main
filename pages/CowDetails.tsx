@@ -16,6 +16,7 @@ import {
   TabsContent,
   Modal,
 } from "../components/ui";
+import { ViewAssessmentModal } from "../components/ViewAssessmentModal";
 import {
   ArrowLeft,
   Activity,
@@ -426,112 +427,13 @@ const FertilityWindowGraph = ({
             High Probability
           </span>
         </div>
+        ```
       </div>
     </div>
   );
 };
 
-const ViewAssessmentModal = ({
-  assessment,
-  onClose,
-}: {
-  assessment: MedicalAssessment | null;
-  onClose: () => void;
-}) => {
-  if (!assessment) return null;
-
-  return (
-    <Modal
-      isOpen={!!assessment}
-      onClose={onClose}
-      title="Medical Assessment Record"
-      className="max-w-xl"
-    >
-      <div className="space-y-6">
-        <div className="flex justify-between items-start border-b border-slate-100 pb-4">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">
-              Date: {new Date(assessment.assessment_date).toLocaleDateString()}
-            </h3>
-            <p className="text-sm text-slate-500 mt-1 flex items-center gap-2">
-              Assessed By:{" "}
-              <Badge variant="default">
-                {typeof assessment.assessed_by === "number"
-                  ? `Staff ID: ${assessment.assessed_by}`
-                  : (assessment.assessed_by as StaffMember).name}
-              </Badge>
-            </p>
-          </div>
-          <Badge variant={assessment.is_cow_sick ? "danger" : "success"}>
-            {assessment.is_cow_sick ? "Sick" : "Healthy"}
-          </Badge>
-        </div>
-
-        <div className="space-y-4 text-sm">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <span className="block text-slate-500 text-xs uppercase tracking-wider font-bold mb-1">
-                Diagnosis
-              </span>
-              <p className="font-medium text-slate-900 dark:text-white">
-                {assessment.diagnosis || "None recorded"}
-              </p>
-            </div>
-            <div>
-              <span className="block text-slate-500 text-xs uppercase tracking-wider font-bold mb-1">
-                Sickness Type
-              </span>
-              <p className="font-medium text-slate-900 dark:text-white capitalize">
-                {assessment.sickness_type
-                  ? assessment.sickness_type.replace("_", " ")
-                  : "N/A"}
-              </p>
-            </div>
-          </div>
-
-          {assessment.is_cow_vaccinated && (
-            <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 text-blue-800">
-              <div className="flex items-center gap-2 mb-1 font-semibold">
-                <Syringe className="h-4 w-4" /> Vaccination Administered
-              </div>
-              <p className="ml-6">
-                {assessment.vaccination_type} on {assessment.vaccination_date}
-              </p>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <span className="block text-slate-500 text-xs uppercase tracking-wider font-bold">
-              Treatment & Notes
-            </span>
-            <div className="bg-slate-50 dark:bg-slate-800 p-4 rounded-xl border border-slate-100 dark:border-slate-700 text-slate-700 dark:text-slate-300">
-              {assessment.treatment && (
-                <p className="mb-2">
-                  <strong>Tx:</strong> {assessment.treatment}
-                </p>
-              )}
-              {assessment.prescription && (
-                <p className="mb-2">
-                  <strong>Rx:</strong> {assessment.prescription}
-                </p>
-              )}
-              {assessment.notes ? (
-                <p>{assessment.notes}</p>
-              ) : (
-                <span className="italic text-slate-400">
-                  No additional notes.
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-        <div className="flex justify-end">
-          <Button onClick={onClose}>Close</Button>
-        </div>
-      </div>
-    </Modal>
-  );
-};
+// --- Main Component ---
 
 const LactationCycleVisual = ({ daysInMilk }: { daysInMilk: number }) => {
   const standardLactation = 305;
@@ -787,17 +689,24 @@ export default function CowDetails() {
                 <h1 className="text-3xl font-bold tracking-tight text-white">
                   {cow.cow_id}
                 </h1>
-                <Badge
-                  className={`px-2.5 py-0.5 border-0 backdrop-blur-md ${
-                    cow.status === "Sick"
-                      ? "bg-rose-500/20 text-rose-200"
-                      : cow.status === "Pregnant"
-                      ? "bg-amber-500/20 text-amber-200"
-                      : "bg-emerald-500/20 text-emerald-200"
-                  }`}
-                >
-                  {cow.status || "Active"}
-                </Badge>
+                <div className="flex gap-2">
+                  {(cow.statuses || [cow.status || "Active"]).map((s) => (
+                    <Badge
+                      key={s}
+                      className={`px-2.5 py-0.5 border-0 backdrop-blur-md ${
+                        s === "Sick"
+                          ? "bg-rose-500/20 text-rose-200"
+                          : s === "Pregnant"
+                          ? "bg-amber-500/20 text-amber-200"
+                          : s === "Lactating"
+                          ? "bg-blue-500/20 text-blue-200"
+                          : "bg-emerald-500/20 text-emerald-200"
+                      }`}
+                    >
+                      {s}
+                    </Badge>
+                  ))}
+                </div>
               </div>
               <div className="flex items-center gap-3 text-sm text-slate-400">
                 <span
