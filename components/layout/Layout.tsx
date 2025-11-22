@@ -14,6 +14,8 @@ import {
   Settings,
   User as UserIcon,
   PieChart,
+  PanelLeftOpen,
+  PanelLeftClose,
 } from "lucide-react";
 import { cn } from "../ui";
 
@@ -21,7 +23,7 @@ import logo from "../../assets/cowsville-logo.svg";
 
 export default function Layout() {
   const { logout, user } = useAuth();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 768);
   const location = useLocation();
 
   const navItems = [
@@ -49,10 +51,12 @@ export default function Layout() {
       {/* Sidebar */}
       <motion.aside
         className={cn(
-          "fixed inset-y-0 left-0 z-30 flex flex-col bg-slate-900 text-slate-300 shadow-2xl transition-all duration-300 md:relative",
+          "fixed inset-y-0 left-0 z-30 flex flex-col bg-slate-900 text-slate-300 shadow-2xl transition-all duration-300",
+          // Mobile: Fixed position, slide in/out
+          "md:relative",
           isSidebarOpen
-            ? "w-72 translate-x-0"
-            : "-translate-x-full w-0 md:w-20 md:translate-x-0"
+            ? "translate-x-0 w-72"
+            : "-translate-x-full w-72 md:translate-x-0 md:w-20"
         )}
       >
         {/* Logo Area */}
@@ -203,16 +207,23 @@ export default function Layout() {
         {/* Header */}
         <header className="flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white/80 backdrop-blur-md dark:bg-slate-900/80 px-6 sticky top-0 z-10">
           <div className="flex items-center gap-4">
-            <button
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+              className={cn(
+                "rounded-xl p-2 transition-all duration-200",
+                isSidebarOpen
+                  ? "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-800"
+                  : "bg-primary-600 text-white shadow-lg shadow-primary-600/30 hover:bg-primary-700"
+              )}
             >
               {isSidebarOpen ? (
-                <Menu className="h-5 w-5" />
+                <PanelLeftClose className="h-5 w-5" />
               ) : (
-                <ChevronRight className="h-5 w-5" />
+                <PanelLeftOpen className="h-5 w-5" />
               )}
-            </button>
+            </motion.button>
           </div>
 
           <div className="flex items-center gap-4">

@@ -357,101 +357,115 @@ export default function ClusterPerformance() {
               </CardTitle>
             </CardHeader>
             <CardContent className="p-0">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
-                  <tr>
-                    <th className="px-6 py-4 font-semibold w-1/2">Indicator</th>
-                    <th className="px-6 py-4 font-semibold">Cluster Average</th>
-                    <th className="px-6 py-4 font-semibold text-right">
-                      Assessment
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
-                      Insemination after calving (days)
-                    </td>
-                    <td className="px-6 py-4 font-bold">
-                      {clusterStats.avgInsemDays}
-                    </td>
-                    <td className="px-6 py-4 text-right flex justify-end">
-                      {renderTrend(Number(clusterStats.avgInsemDays), 80, true)}
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
-                      Average Calving interval (months)
-                    </td>
-                    <td className="px-6 py-4 font-bold">
-                      {clusterStats.avgCalvingInterval}
-                    </td>
-                    <td className="px-6 py-4 text-right flex justify-end">
-                      {renderTrend(
-                        Number(clusterStats.avgCalvingInterval),
-                        14,
-                        true
-                      )}
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
-                      Heat after calving (days)
-                    </td>
-                    <td className="px-6 py-4 font-bold">
-                      {clusterStats.avgHeatDays}
-                    </td>
-                    <td className="px-6 py-4 text-right flex justify-end">
-                      {renderTrend(Number(clusterStats.avgHeatDays), 60, true)}
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
-                      No. of inseminations per conception
-                    </td>
-                    <td className="px-6 py-4 font-bold">
-                      {clusterStats.insemPerConception}
-                    </td>
-                    <td className="px-6 py-4 text-right flex justify-end">
-                      {renderTrend(
-                        Number(clusterStats.insemPerConception),
-                        2.5,
-                        true
-                      )}
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
-                      Rate of repeat breeders (%)
-                    </td>
-                    <td className="px-6 py-4 font-bold">
-                      {clusterStats.repeatBreederRate}%
-                    </td>
-                    <td className="px-6 py-4 text-right flex justify-end">
-                      {renderTrend(
-                        Number(clusterStats.repeatBreederRate),
-                        15,
-                        true
-                      )}
-                    </td>
-                  </tr>
-                  <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                    <td className="px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
-                      Non-pregnant cows 3 month after calving (%)
-                    </td>
-                    <td className="px-6 py-4 font-bold">
-                      {clusterStats.nonPreg90DayRate}%
-                    </td>
-                    <td className="px-6 py-4 text-right flex justify-end">
-                      {renderTrend(
-                        Number(clusterStats.nonPreg90DayRate),
-                        20,
-                        true
-                      )}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left min-w-[600px]">
+                  <thead className="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
+                    <tr>
+                      <th className="px-4 md:px-6 py-4 font-semibold w-1/2">
+                        Indicator
+                      </th>
+                      <th className="px-4 md:px-6 py-4 font-semibold">
+                        Cluster Average
+                      </th>
+                      <th className="px-4 md:px-6 py-4 font-semibold text-right">
+                        Assessment
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 md:px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
+                        Insemination after calving (days)
+                      </td>
+                      <td className="px-4 md:px-6 py-4 font-bold">
+                        {clusterStats.avgInsemDays}
+                      </td>
+                      <td className="px-4 md:px-6 py-4 text-right flex justify-end">
+                        {renderTrend(
+                          Number(clusterStats.avgInsemDays),
+                          80,
+                          true
+                        )}
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 md:px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
+                        Average Calving interval (months)
+                      </td>
+                      <td className="px-4 md:px-6 py-4 font-bold">
+                        {clusterStats.avgCalvingInterval}
+                      </td>
+                      <td className="px-4 md:px-6 py-4 text-right flex justify-end">
+                        {renderTrend(
+                          Number(clusterStats.avgCalvingInterval),
+                          14,
+                          true
+                        )}
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 md:px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
+                        Heat after calving (days)
+                      </td>
+                      <td className="px-4 md:px-6 py-4 font-bold">
+                        {clusterStats.avgHeatDays}
+                      </td>
+                      <td className="px-4 md:px-6 py-4 text-right flex justify-end">
+                        {renderTrend(
+                          Number(clusterStats.avgHeatDays),
+                          60,
+                          true
+                        )}
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 md:px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
+                        No. of inseminations per conception
+                      </td>
+                      <td className="px-4 md:px-6 py-4 font-bold">
+                        {clusterStats.insemPerConception}
+                      </td>
+                      <td className="px-4 md:px-6 py-4 text-right flex justify-end">
+                        {renderTrend(
+                          Number(clusterStats.insemPerConception),
+                          2.5,
+                          true
+                        )}
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 md:px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
+                        Rate of repeat breeders (%)
+                      </td>
+                      <td className="px-4 md:px-6 py-4 font-bold">
+                        {clusterStats.repeatBreederRate}%
+                      </td>
+                      <td className="px-4 md:px-6 py-4 text-right flex justify-end">
+                        {renderTrend(
+                          Number(clusterStats.repeatBreederRate),
+                          15,
+                          true
+                        )}
+                      </td>
+                    </tr>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                      <td className="px-4 md:px-6 py-4 font-medium text-slate-700 dark:text-slate-300">
+                        Non-pregnant cows 3 month after calving (%)
+                      </td>
+                      <td className="px-4 md:px-6 py-4 font-bold">
+                        {clusterStats.nonPreg90DayRate}%
+                      </td>
+                      <td className="px-4 md:px-6 py-4 text-right flex justify-end">
+                        {renderTrend(
+                          Number(clusterStats.nonPreg90DayRate),
+                          20,
+                          true
+                        )}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
