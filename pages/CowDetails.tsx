@@ -154,7 +154,7 @@ const FertilityWindowGraph = ({
       <div className="relative w-full aspect-[2.5/1] bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         <svg
           className="w-full h-full"
-          viewBox={`0 0 ${graphWidth} ${graphHeight}`}
+          viewBox={`-20 -25 ${graphWidth + 40} ${graphHeight + 25}`}
           preserveAspectRatio="none"
         >
           <defs>
@@ -691,20 +691,21 @@ export default function CowDetails() {
                 </h1>
                 <div className="flex gap-2">
                   {(cow.statuses || [cow.status || "Active"]).map((s) => (
-                    <Badge
-                      key={s}
-                      className={`px-2.5 py-0.5 border-0 backdrop-blur-md ${
-                        s === "Sick"
-                          ? "bg-rose-500/20 text-rose-200"
-                          : s === "Pregnant"
-                          ? "bg-amber-500/20 text-amber-200"
-                          : s === "Lactating"
-                          ? "bg-blue-500/20 text-blue-200"
-                          : "bg-emerald-500/20 text-emerald-200"
-                      }`}
-                    >
-                      {s}
-                    </Badge>
+                    <React.Fragment key={s}>
+                      <Badge
+                        className={`px-2.5 py-0.5 border-0 backdrop-blur-md ${
+                          s === "Sick"
+                            ? "bg-rose-500/20 text-rose-200"
+                            : s === "Pregnant"
+                            ? "bg-amber-500/20 text-amber-200"
+                            : s === "Lactating"
+                            ? "bg-blue-500/20 text-blue-200"
+                            : "bg-emerald-500/20 text-emerald-200"
+                        }`}
+                      >
+                        {s}
+                      </Badge>
+                    </React.Fragment>
                   ))}
                 </div>
               </div>
