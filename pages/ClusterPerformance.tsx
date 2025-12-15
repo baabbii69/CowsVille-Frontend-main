@@ -89,6 +89,12 @@ export default function ClusterPerformance() {
     let nonPregnant90Days = 0;
     let cowsPost90Days = 0;
 
+    // Track cows not meeting goals
+    const insemAfterCalvingIssues: { cow_id: string; days: number }[] = [];
+    const insemPerConceptionIssues: { cow_id: string; count: number }[] = [];
+    const repeatBreederIssues: { cow_id: string; count: number }[] = [];
+    const nonPreg90DayIssues: { cow_id: string; daysSinceCalving: number }[] = [];
+
     const now = new Date();
 
     clusterCows.forEach((cow) => {
@@ -105,18 +111,35 @@ export default function ClusterPerformance() {
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         totalInsemDays += diffDays;
         insemCount++;
+        
+        // Check if exceeds goal (> 60 days)
+        if (diffDays > 60) {
+          insemAfterCalvingIssues.push({ cow_id: cow.cow_id, days: diffDays });
+        }
       }
 
       // 4. Insems per conception (only for pregnant cows)
-      if (cow.status === "Pregnant") {
-        totalInsemPerConception += cow.number_of_inseminations;
+      if (cow.status === "Pregnant" || (cow.statuses && cow.statuses.includes("Pregnant"))) {
+        const insemCountCow = cow.number_of_inseminations;
+        totalInsemPerConception += insemCountCow;
         pregnantCount++;
+        
+        // Check if exceeds goal (> 3)
+        if (insemCountCow > 3) {
+          insemPerConceptionIssues.push({ cow_id: cow.cow_id, count: insemCountCow });
+        }
       }
 
       // 5. Repeat breeders
       if (cow.number_of_inseminations > 0) {
         inseminatedCowsCount++;
-        if (cow.number_of_inseminations >= 3) repeatBreeders++;
+        if (cow.number_of_inseminations >= 3) {
+          repeatBreeders++;
+          repeatBreederIssues.push({ 
+            cow_id: cow.cow_id, 
+            count: cow.number_of_inseminations 
+          });
+        }
       }
 
       // 6. Non-pregnant > 3 months
@@ -126,8 +149,14 @@ export default function ClusterPerformance() {
         );
         if (daysSinceCalving > 90) {
           cowsPost90Days++;
-          if (cow.status !== "Pregnant") {
+          const isPregnant = cow.status === "Pregnant" || 
+                           (cow.statuses && cow.statuses.includes("Pregnant"));
+          if (!isPregnant) {
             nonPregnant90Days++;
+            nonPreg90DayIssues.push({ 
+              cow_id: cow.cow_id, 
+              daysSinceCalving 
+            });
           }
         }
       }
@@ -147,17 +176,28 @@ export default function ClusterPerformance() {
       avgInsemDays: insemCount
         ? (totalInsemDays / insemCount).toFixed(1)
         : "N/A",
+      avgInsemDaysIssues: insemAfterCalvingIssues,
+      
       avgCalvingInterval: avgCalvingInterval.toFixed(1),
+      avgCalvingIntervalIssues: [], // Mock - requires historical data
+      
       avgHeatDays: heatAfterCalving.toFixed(1),
+      avgHeatDaysIssues: [], // Mock - requires historical data
+      
       insemPerConception: pregnantCount
         ? (totalInsemPerConception / pregnantCount).toFixed(1)
         : "0.0",
+      insemPerConceptionIssues,
+      
       repeatBreederRate: inseminatedCowsCount
         ? ((repeatBreeders / inseminatedCowsCount) * 100).toFixed(1)
         : "0.0",
+      repeatBreederIssues,
+      
       nonPreg90DayRate: cowsPost90Days
         ? ((nonPregnant90Days / cowsPost90Days) * 100).toFixed(1)
         : "0.0",
+      nonPreg90DayIssues,
     };
   }, [activeClusterId, farms, cows]);
 
@@ -361,15 +401,14 @@ export default function ClusterPerformance() {
                 <table className="w-full text-sm text-left min-w-[600px]">
                   <thead className="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
                     <tr>
-                      <th className="px-4 md:px-6 py-4 font-semibold w-1/2">
+                      <th className="px-4 md:px-6 py-4 font-semibold w-1/3">
                         Indicator
                       </th>
                       <th className="px-4 md:px-6 py-4 font-semibold">
                         Cluster Average
                       </th>
-                      <th className="px-4 md:px-6 py-4 font-semibold text-right">
-                        Assessment
-                      </th>
+                      <th className="px-4 md:px-6 py-4 font-semibold">Goal</th>
+                      <th className="px-4 md:px-6 py-4 font-semibold">Action</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -380,11 +419,25 @@ export default function ClusterPerformance() {
                       <td className="px-4 md:px-6 py-4 font-bold">
                         {clusterStats.avgInsemDays}
                       </td>
-                      <td className="px-4 md:px-6 py-4 text-right flex justify-end">
-                        {renderTrend(
-                          Number(clusterStats.avgInsemDays),
-                          80,
-                          true
+                      <td className="px-4 md:px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                        &lt; 60 days
+                      </td>
+                      <td className="px-4 md:px-6 py-4">
+                        {clusterStats.avgInsemDaysIssues.length > 0 ? (
+                          <div className="group relative inline-block">
+                            <Badge variant="warning" className="cursor-help">
+                              {clusterStats.avgInsemDaysIssues.length} {clusterStats.avgInsemDaysIssues.length === 1 ? 'cow needs' : 'cows need'} attention
+                            </Badge>
+                            <div className="invisible group-hover:visible absolute z-10 w-80 max-h-64 overflow-y-auto p-3 mt-1 text-xs bg-slate-900 text-white rounded shadow-lg right-0">
+                              <div className="space-y-1">
+                                {clusterStats.avgInsemDaysIssues.map((c: any, idx: number) => (
+                                  <div key={idx}>{c.cow_id} ({c.days}d)</div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <Badge variant="success">All on track</Badge>
                         )}
                       </td>
                     </tr>
@@ -395,12 +448,11 @@ export default function ClusterPerformance() {
                       <td className="px-4 md:px-6 py-4 font-bold">
                         {clusterStats.avgCalvingInterval}
                       </td>
-                      <td className="px-4 md:px-6 py-4 text-right flex justify-end">
-                        {renderTrend(
-                          Number(clusterStats.avgCalvingInterval),
-                          14,
-                          true
-                        )}
+                      <td className="px-4 md:px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                        &lt; 12 months
+                      </td>
+                      <td className="px-4 md:px-6 py-4">
+                        <Badge variant="default">Data pending</Badge>
                       </td>
                     </tr>
                     <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -410,12 +462,11 @@ export default function ClusterPerformance() {
                       <td className="px-4 md:px-6 py-4 font-bold">
                         {clusterStats.avgHeatDays}
                       </td>
-                      <td className="px-4 md:px-6 py-4 text-right flex justify-end">
-                        {renderTrend(
-                          Number(clusterStats.avgHeatDays),
-                          60,
-                          true
-                        )}
+                      <td className="px-4 md:px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                        &lt; 45 days
+                      </td>
+                      <td className="px-4 md:px-6 py-4">
+                        <Badge variant="default">Data pending</Badge>
                       </td>
                     </tr>
                     <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -425,11 +476,25 @@ export default function ClusterPerformance() {
                       <td className="px-4 md:px-6 py-4 font-bold">
                         {clusterStats.insemPerConception}
                       </td>
-                      <td className="px-4 md:px-6 py-4 text-right flex justify-end">
-                        {renderTrend(
-                          Number(clusterStats.insemPerConception),
-                          2.5,
-                          true
+                      <td className="px-4 md:px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                        &lt; 3
+                      </td>
+                      <td className="px-4 md:px-6 py-4">
+                        {clusterStats.insemPerConceptionIssues.length > 0 ? (
+                          <div className="group relative inline-block">
+                            <Badge variant="warning" className="cursor-help">
+                              {clusterStats.insemPerConceptionIssues.length} {clusterStats.insemPerConceptionIssues.length === 1 ? 'cow needs' : 'cows need'} attention
+                            </Badge>
+                            <div className="invisible group-hover:visible absolute z-10 w-80 max-h-64 overflow-y-auto p-3 mt-1 text-xs bg-slate-900 text-white rounded shadow-lg right-0">
+                              <div className="space-y-1">
+                                {clusterStats.insemPerConceptionIssues.map((c: any, idx: number) => (
+                                  <div key={idx}>{c.cow_id} ({c.count}×)</div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <Badge variant="success">All on track</Badge>
                         )}
                       </td>
                     </tr>
@@ -440,11 +505,25 @@ export default function ClusterPerformance() {
                       <td className="px-4 md:px-6 py-4 font-bold">
                         {clusterStats.repeatBreederRate}%
                       </td>
-                      <td className="px-4 md:px-6 py-4 text-right flex justify-end">
-                        {renderTrend(
-                          Number(clusterStats.repeatBreederRate),
-                          15,
-                          true
+                      <td className="px-4 md:px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                        &lt; 10%
+                      </td>
+                      <td className="px-4 md:px-6 py-4">
+                        {clusterStats.repeatBreederIssues.length > 0 ? (
+                          <div className="group relative inline-block">
+                            <Badge variant="warning" className="cursor-help">
+                              {clusterStats.repeatBreederIssues.length} {clusterStats.repeatBreederIssues.length === 1 ? 'cow needs' : 'cows need'} attention
+                            </Badge>
+                            <div className="invisible group-hover:visible absolute z-10 w-80 max-h-64 overflow-y-auto p-3 mt-1 text-xs bg-slate-900 text-white rounded shadow-lg right-0">
+                              <div className="space-y-1">
+                                {clusterStats.repeatBreederIssues.map((c: any, idx: number) => (
+                                  <div key={idx}>{c.cow_id} ({c.count}×)</div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <Badge variant="success">All on track</Badge>
                         )}
                       </td>
                     </tr>
@@ -455,11 +534,25 @@ export default function ClusterPerformance() {
                       <td className="px-4 md:px-6 py-4 font-bold">
                         {clusterStats.nonPreg90DayRate}%
                       </td>
-                      <td className="px-4 md:px-6 py-4 text-right flex justify-end">
-                        {renderTrend(
-                          Number(clusterStats.nonPreg90DayRate),
-                          20,
-                          true
+                      <td className="px-4 md:px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                        &lt; 10%
+                      </td>
+                      <td className="px-4 md:px-6 py-4">
+                        {clusterStats.nonPreg90DayIssues.length > 0 ? (
+                          <div className="group relative inline-block">
+                            <Badge variant="warning" className="cursor-help">
+                              {clusterStats.nonPreg90DayIssues.length} {clusterStats.nonPreg90DayIssues.length === 1 ? 'cow needs' : 'cows need'} attention
+                            </Badge>
+                            <div className="invisible group-hover:visible absolute z-10 w-80 max-h-64 overflow-y-auto p-3 mt-1 text-xs bg-slate-900 text-white rounded shadow-lg right-0">
+                              <div className="space-y-1">
+                                {clusterStats.nonPreg90DayIssues.map((c: any, idx: number) => (
+                                  <div key={idx}>{c.cow_id} ({c.daysSinceCalving}d)</div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ) : (
+                          <Badge variant="success">All on track</Badge>
                         )}
                       </td>
                     </tr>

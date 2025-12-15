@@ -391,6 +391,12 @@ export default function FarmDetails() {
     let nonPregnant90Days = 0;
     let cowsPost90Days = 0;
 
+    // Track cows not meeting goals
+    const insemAfterCalvingIssues: { cow_id: string; days: number }[] = [];
+    const insemPerConceptionIssues: { cow_id: string; count: number }[] = [];
+    const repeatBreederIssues: { cow_id: string; count: number }[] = [];
+    const nonPreg90DayIssues: { cow_id: string; daysSinceCalving: number }[] = [];
+
     const now = new Date();
 
     allCows.forEach((cow) => {
@@ -407,18 +413,35 @@ export default function FarmDetails() {
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         totalInsemDays += diffDays;
         insemCount++;
+        
+        // Check if exceeds goal (> 60 days)
+        if (diffDays > 60) {
+          insemAfterCalvingIssues.push({ cow_id: cow.cow_id, days: diffDays });
+        }
       }
 
       // 4. Insems per conception (only for pregnant cows)
-      if (cow.status === "Pregnant") {
-        totalInsemPerConception += cow.number_of_inseminations;
+      if (cow.status === "Pregnant" || (cow.statuses && cow.statuses.includes("Pregnant"))) {
+        const insemCount = cow.number_of_inseminations;
+        totalInsemPerConception += insemCount;
         pregnantCount++;
+        
+        // Check if exceeds goal (> 3)
+        if (insemCount > 3) {
+          insemPerConceptionIssues.push({ cow_id: cow.cow_id, count: insemCount });
+        }
       }
 
       // 5. Repeat breeders
       if (cow.number_of_inseminations > 0) {
         inseminatedCowsCount++;
-        if (cow.number_of_inseminations >= 3) repeatBreeders++;
+        if (cow.number_of_inseminations >= 3) {
+          repeatBreeders++;
+          repeatBreederIssues.push({ 
+            cow_id: cow.cow_id, 
+            count: cow.number_of_inseminations 
+          });
+        }
       }
 
       // 6. Non-pregnant > 3 months
@@ -428,8 +451,14 @@ export default function FarmDetails() {
         );
         if (daysSinceCalving > 90) {
           cowsPost90Days++;
-          if (cow.status !== "Pregnant") {
+          const isPregnant = cow.status === "Pregnant" || 
+                           (cow.statuses && cow.statuses.includes("Pregnant"));
+          if (!isPregnant) {
             nonPregnant90Days++;
+            nonPreg90DayIssues.push({ 
+              cow_id: cow.cow_id, 
+              daysSinceCalving 
+            });
           }
         }
       }
@@ -443,17 +472,28 @@ export default function FarmDetails() {
       avgInsemDays: insemCount
         ? (totalInsemDays / insemCount).toFixed(1)
         : "N/A",
+      avgInsemDaysIssues: insemAfterCalvingIssues,
+      
       avgCalvingInterval: avgCalvingInterval.toFixed(1),
+      avgCalvingIntervalIssues: [], // Mock - requires historical data
+      
       avgHeatDays: heatAfterCalving.toFixed(1),
+      avgHeatDaysIssues: [], // Mock - requires historical data
+      
       insemPerConception: pregnantCount
         ? (totalInsemPerConception / pregnantCount).toFixed(1)
         : "0.0",
+      insemPerConceptionIssues,
+      
       repeatBreederRate: inseminatedCowsCount
         ? ((repeatBreeders / inseminatedCowsCount) * 100).toFixed(1)
         : "0.0",
+      repeatBreederIssues,
+      
       nonPreg90DayRate: cowsPost90Days
         ? ((nonPregnant90Days / cowsPost90Days) * 100).toFixed(1)
         : "0.0",
+      nonPreg90DayIssues,
     };
   }, [allCows]);
 
@@ -1513,13 +1553,12 @@ export default function FarmDetails() {
                   <table className="w-full text-sm text-left">
                     <thead className="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
                       <tr>
-                        <th className="px-6 py-4 font-semibold w-1/2">
+                        <th className="px-6 py-4 font-semibold w-1/3">
                           Indicator
                         </th>
                         <th className="px-6 py-4 font-semibold">Value</th>
-                        <th className="px-6 py-4 font-semibold text-right">
-                          Status
-                        </th>
+                        <th className="px-6 py-4 font-semibold">Goal</th>
+                        <th className="px-6 py-4 font-semibold">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1532,11 +1571,25 @@ export default function FarmDetails() {
                             <td className="px-6 py-4 font-bold">
                               {performanceMetrics.avgInsemDays}
                             </td>
-                            <td className="px-6 py-4 text-right">
-                              {renderTrend(
-                                Number(performanceMetrics.avgInsemDays),
-                                80,
-                                true
+                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                              &lt; 60 days
+                            </td>
+                            <td className="px-6 py-4">
+                              {performanceMetrics.avgInsemDaysIssues.length > 0 ? (
+                                <div className="group relative inline-block">
+                                  <Badge variant="warning" className="cursor-help">
+                                    {performanceMetrics.avgInsemDaysIssues.length} {performanceMetrics.avgInsemDaysIssues.length === 1 ? 'cow needs' : 'cows need'} attention
+                                  </Badge>
+                                  <div className="invisible group-hover:visible absolute z-10 w-80 max-h-64 overflow-y-auto p-3 mt-1 text-xs bg-slate-900 text-white rounded shadow-lg">
+                                    <div className="space-y-1">
+                                      {performanceMetrics.avgInsemDaysIssues.map((c: any, idx: number) => (
+                                        <div key={idx}>{c.cow_id} ({c.days}d)</div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <Badge variant="success">All on track</Badge>
                               )}
                             </td>
                           </tr>
@@ -1547,12 +1600,11 @@ export default function FarmDetails() {
                             <td className="px-6 py-4 font-bold">
                               {performanceMetrics.avgCalvingInterval}
                             </td>
-                            <td className="px-6 py-4 text-right">
-                              {renderTrend(
-                                Number(performanceMetrics.avgCalvingInterval),
-                                14,
-                                true
-                              )}
+                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                              &lt; 12 months
+                            </td>
+                            <td className="px-6 py-4">
+                              <Badge variant="default">Data pending</Badge>
                             </td>
                           </tr>
                           <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -1562,12 +1614,11 @@ export default function FarmDetails() {
                             <td className="px-6 py-4 font-bold">
                               {performanceMetrics.avgHeatDays}
                             </td>
-                            <td className="px-6 py-4 text-right">
-                              {renderTrend(
-                                Number(performanceMetrics.avgHeatDays),
-                                60,
-                                true
-                              )}
+                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                              &lt; 45 days
+                            </td>
+                            <td className="px-6 py-4">
+                              <Badge variant="default">Data pending</Badge>
                             </td>
                           </tr>
                           <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -1577,11 +1628,25 @@ export default function FarmDetails() {
                             <td className="px-6 py-4 font-bold">
                               {performanceMetrics.insemPerConception}
                             </td>
-                            <td className="px-6 py-4 text-right">
-                              {renderTrend(
-                                Number(performanceMetrics.insemPerConception),
-                                2.5,
-                                true
+                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                              &lt; 3
+                            </td>
+                            <td className="px-6 py-4">
+                              {performanceMetrics.insemPerConceptionIssues.length > 0 ? (
+                                <div className="group relative inline-block">
+                                  <Badge variant="warning" className="cursor-help">
+                                    {performanceMetrics.insemPerConceptionIssues.length} {performanceMetrics.insemPerConceptionIssues.length === 1 ? 'cow needs' : 'cows need'} attention
+                                  </Badge>
+                                  <div className="invisible group-hover:visible absolute z-10 w-80 max-h-64 overflow-y-auto p-3 mt-1 text-xs bg-slate-900 text-white rounded shadow-lg">
+                                    <div className="space-y-1">
+                                      {performanceMetrics.insemPerConceptionIssues.map((c: any, idx: number) => (
+                                        <div key={idx}>{c.cow_id} ({c.count}×)</div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <Badge variant="success">All on track</Badge>
                               )}
                             </td>
                           </tr>
@@ -1592,11 +1657,25 @@ export default function FarmDetails() {
                             <td className="px-6 py-4 font-bold">
                               {performanceMetrics.repeatBreederRate}%
                             </td>
-                            <td className="px-6 py-4 text-right">
-                              {renderTrend(
-                                Number(performanceMetrics.repeatBreederRate),
-                                15,
-                                true
+                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                              &lt; 10%
+                            </td>
+                            <td className="px-6 py-4">
+                              {performanceMetrics.repeatBreederIssues.length > 0 ? (
+                                <div className="group relative inline-block">
+                                  <Badge variant="warning" className="cursor-help">
+                                    {performanceMetrics.repeatBreederIssues.length} {performanceMetrics.repeatBreederIssues.length === 1 ? 'cow needs' : 'cows need'} attention
+                                  </Badge>
+                                  <div className="invisible group-hover:visible absolute z-10 w-80 max-h-64 overflow-y-auto p-3 mt-1 text-xs bg-slate-900 text-white rounded shadow-lg">
+                                    <div className="space-y-1">
+                                      {performanceMetrics.repeatBreederIssues.map((c: any, idx: number) => (
+                                        <div key={idx}>{c.cow_id} ({c.count}×)</div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <Badge variant="success">All on track</Badge>
                               )}
                             </td>
                           </tr>
@@ -1607,11 +1686,25 @@ export default function FarmDetails() {
                             <td className="px-6 py-4 font-bold">
                               {performanceMetrics.nonPreg90DayRate}%
                             </td>
-                            <td className="px-6 py-4 text-right">
-                              {renderTrend(
-                                Number(performanceMetrics.nonPreg90DayRate),
-                                20,
-                                true
+                            <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                              &lt; 10%
+                            </td>
+                            <td className="px-6 py-4">
+                              {performanceMetrics.nonPreg90DayIssues.length > 0 ? (
+                                <div className="group relative inline-block">
+                                  <Badge variant="warning" className="cursor-help">
+                                    {performanceMetrics.nonPreg90DayIssues.length} {performanceMetrics.nonPreg90DayIssues.length === 1 ? 'cow needs' : 'cows need'} attention
+                                  </Badge>
+                                  <div className="invisible group-hover:visible absolute z-10 w-80 max-h-64 overflow-y-auto p-3 mt-1 text-xs bg-slate-900 text-white rounded shadow-lg">
+                                    <div className="space-y-1">
+                                      {performanceMetrics.nonPreg90DayIssues.map((c: any, idx: number) => (
+                                        <div key={idx}>{c.cow_id} ({c.daysSinceCalving}d)</div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                </div>
+                              ) : (
+                                <Badge variant="success">All on track</Badge>
                               )}
                             </td>
                           </tr>
@@ -1663,15 +1756,14 @@ export default function FarmDetails() {
                   <table className="w-full text-sm text-left">
                     <thead className="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
                       <tr>
-                        <th className="px-6 py-4 font-semibold w-1/2">
+                        <th className="px-6 py-4 font-semibold w-1/3">
                           Indicator
                         </th>
                         <th className="px-6 py-4 font-semibold">
                           Cluster Avg.
                         </th>
-                        <th className="px-6 py-4 font-semibold text-right">
-                          Comparison
-                        </th>
+                        <th className="px-6 py-4 font-semibold">Goal</th>
+                        <th className="px-6 py-4 font-semibold">Action</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -1681,10 +1773,26 @@ export default function FarmDetails() {
                           Insemination after calving (days)
                         </td>
                         <td className="px-6 py-4 font-bold">75.0</td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="text-xs text-slate-400 flex items-center justify-end gap-1">
-                            <Minus className="h-3 w-3" /> Avg
-                          </span>
+                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                          &lt; 60 days
+                        </td>
+                        <td className="px-6 py-4">
+                          {performanceMetrics?.avgInsemDaysIssues.length > 0 ? (
+                            <div className="group relative inline-block">
+                              <Badge variant="warning" className="cursor-help">
+                                {performanceMetrics.avgInsemDaysIssues.length} {performanceMetrics.avgInsemDaysIssues.length === 1 ? 'cow needs' : 'cows need'} attention
+                              </Badge>
+                              <div className="invisible group-hover:visible absolute z-10 w-80 max-h-64 overflow-y-auto p-3 mt-1 text-xs bg-slate-900 text-white rounded shadow-lg right-0">
+                                <div className="space-y-1">
+                                  {performanceMetrics.avgInsemDaysIssues.map((c: any, idx: number) => (
+                                    <div key={idx}>{c.cow_id} ({c.days}d)</div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <Badge variant="success">All on track</Badge>
+                          )}
                         </td>
                       </tr>
                       <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -1692,8 +1800,11 @@ export default function FarmDetails() {
                           Average Calving interval (months)
                         </td>
                         <td className="px-6 py-4 font-bold">14.2</td>
-                        <td className="px-6 py-4 text-right text-emerald-600 text-xs font-bold">
-                          Better
+                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                          &lt; 12 months
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant="default">Data pending</Badge>
                         </td>
                       </tr>
                       <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -1701,8 +1812,11 @@ export default function FarmDetails() {
                           Heat after calving (days)
                         </td>
                         <td className="px-6 py-4 font-bold">50.5</td>
-                        <td className="px-6 py-4 text-right text-emerald-600 text-xs font-bold">
-                          Better
+                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                          &lt; 45 days
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant="default">Data pending</Badge>
                         </td>
                       </tr>
                       <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -1710,8 +1824,26 @@ export default function FarmDetails() {
                           No. of inseminations per conception
                         </td>
                         <td className="px-6 py-4 font-bold">1.8</td>
-                        <td className="px-6 py-4 text-right text-rose-500 text-xs font-bold">
-                          Lower
+                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                          &lt; 3
+                        </td>
+                        <td className="px-6 py-4">
+                          {performanceMetrics?.insemPerConceptionIssues.length > 0 ? (
+                            <div className="group relative inline-block">
+                              <Badge variant="warning" className="cursor-help">
+                                {performanceMetrics.insemPerConceptionIssues.length} {performanceMetrics.insemPerConceptionIssues.length === 1 ? 'cow needs' : 'cows need'} attention
+                              </Badge>
+                              <div className="invisible group-hover:visible absolute z-10 w-80 max-h-64 overflow-y-auto p-3 mt-1 text-xs bg-slate-900 text-white rounded shadow-lg right-0">
+                                <div className="space-y-1">
+                                  {performanceMetrics.insemPerConceptionIssues.map((c: any, idx: number) => (
+                                    <div key={idx}>{c.cow_id} ({c.count}×)</div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <Badge variant="success">All on track</Badge>
+                          )}
                         </td>
                       </tr>
                       <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -1719,10 +1851,26 @@ export default function FarmDetails() {
                           Rate of repeat breeders (%)
                         </td>
                         <td className="px-6 py-4 font-bold">12.5%</td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="text-xs text-slate-400 flex items-center justify-end gap-1">
-                            <Minus className="h-3 w-3" /> Avg
-                          </span>
+                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                          &lt; 10%
+                        </td>
+                        <td className="px-6 py-4">
+                          {performanceMetrics?.repeatBreederIssues.length > 0 ? (
+                            <div className="group relative inline-block">
+                              <Badge variant="warning" className="cursor-help">
+                                {performanceMetrics.repeatBreederIssues.length} {performanceMetrics.repeatBreederIssues.length === 1 ? 'cow needs' : 'cows need'} attention
+                              </Badge>
+                              <div className="invisible group-hover:visible absolute z-10 w-80 max-h-64 overflow-y-auto p-3 mt-1 text-xs bg-slate-900 text-white rounded shadow-lg right-0">
+                                <div className="space-y-1">
+                                  {performanceMetrics.repeatBreederIssues.map((c: any, idx: number) => (
+                                    <div key={idx}>{c.cow_id} ({c.count}×)</div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <Badge variant="success">All on track</Badge>
+                          )}
                         </td>
                       </tr>
                       <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
@@ -1730,8 +1878,26 @@ export default function FarmDetails() {
                           Non-pregnant cows 3 month after calving (%)
                         </td>
                         <td className="px-6 py-4 font-bold">25.0%</td>
-                        <td className="px-6 py-4 text-right text-emerald-600 text-xs font-bold">
-                          Better
+                        <td className="px-6 py-4 text-sm text-slate-600 dark:text-slate-400">
+                          &lt; 10%
+                        </td>
+                        <td className="px-6 py-4">
+                          {performanceMetrics?.nonPreg90DayIssues.length > 0 ? (
+                            <div className="group relative inline-block">
+                              <Badge variant="warning" className="cursor-help">
+                                {performanceMetrics.nonPreg90DayIssues.length} {performanceMetrics.nonPreg90DayIssues.length === 1 ? 'cow needs' : 'cows need'} attention
+                              </Badge>
+                              <div className="invisible group-hover:visible absolute z-10 w-80 max-h-64 overflow-y-auto p-3 mt-1 text-xs bg-slate-900 text-white rounded shadow-lg right-0">
+                                <div className="space-y-1">
+                                  {performanceMetrics.nonPreg90DayIssues.map((c: any, idx: number) => (
+                                    <div key={idx}>{c.cow_id} ({c.daysSinceCalving}d)</div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <Badge variant="success">All on track</Badge>
+                          )}
                         </td>
                       </tr>
                     </tbody>
