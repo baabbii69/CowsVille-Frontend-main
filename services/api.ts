@@ -567,27 +567,41 @@ export const CowService = {
         fetchAllPages<any>("/medical-assessments/"),
       ]);
 
-      // 1. Process Pregnancy (Latest Record per Cow)
-      const latestReproByCow = new Map<string, any>();
+      // 1. Process Pregnancy (Latest Confirmed Pregnancy per Cow)
+      const pregnantCowIds = new Set<string>();
+      
+      // Group records by cow
+      const recordsByCow = new Map<string, any[]>();
       reproRecords.forEach((record: any) => {
         if (!record.cow) return;
-        // Handle both ID and object cases for record.cow
-        const recordCowId =
-          typeof record.cow === "object"
-            ? String(record.cow.id)
-            : String(record.cow);
-
-        const existing = latestReproByCow.get(recordCowId);
-        // Assuming higher ID means newer
-        if (!existing || record.id > existing.id) {
-          latestReproByCow.set(recordCowId, record);
+        const recordCowId = typeof record.cow === "object" ? String(record.cow.id) : String(record.cow);
+        
+        if (!recordsByCow.has(recordCowId)) {
+          recordsByCow.set(recordCowId, []);
         }
+        recordsByCow.get(recordCowId)?.push(record);
       });
 
-      const pregnantCowIds = new Set<string>();
-      latestReproByCow.forEach((record, cowId) => {
-        if (record.is_cow_pregnant === true) {
-          pregnantCowIds.add(cowId);
+      // Analyze each cow's history
+      recordsByCow.forEach((records, cowId) => {
+        // Sort by ID descending (assuming higher ID is newer)
+        // Ideally we should sort by date, but ID is a decent proxy if dates are missing
+        records.sort((a, b) => b.id - a.id);
+
+        // Find the most recent record that confirms pregnancy
+        const latestPregnancyRecord = records.find(r => r.is_cow_pregnant === true);
+
+        if (latestPregnancyRecord) {
+          // Check if there's a calving event AFTER this pregnancy record
+          // If a cow calved after being marked pregnant, she is no longer pregnant
+          const subsequentCalving = records.find(r => 
+            r.id > latestPregnancyRecord.id && 
+            r.calving_date // Has a calving date
+          );
+
+          if (!subsequentCalving) {
+             pregnantCowIds.add(cowId);
+          }
         }
       });
 

@@ -94,8 +94,12 @@ export default function Dashboard() {
   // Previously summed farm.total_number_of_cows, which caused discrepancies with backend data
   const totalCows = cows ? cows.length : 0;
 
-  const sickCows = activeCows.filter((c) => c.status === "Sick").length;
-  const pregnantCows = activeCows.filter((c) => c.status === "Pregnant").length;
+  const sickCows = activeCows.filter((c) => 
+    c.statuses?.includes("Sick") || c.status === "Sick"
+  ).length;
+  const pregnantCows = activeCows.filter((c) => 
+    c.statuses?.includes("Pregnant") || c.status === "Pregnant"
+  ).length;
   const totalMilk = activeFarms.reduce((acc, f) => acc + f.total_daily_milk, 0);
 
   // For the list view

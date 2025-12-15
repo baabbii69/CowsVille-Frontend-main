@@ -45,7 +45,7 @@ const farmSchema = z.object({
   telephone_number: z.string().regex(/^\+?1?\d{9,15}$/, "Invalid phone number"),
   location_gps: z.string().optional(),
   cluster_number: z.string().optional(),
-  fertility_camp_no: z.coerce.number().min(0, "Must be positive"),
+  fertility_camp_no: z.coerce.number().min(1, "Must be at least 1"),
 
   // Population
   total_number_of_cows: z.coerce.number().min(0),
@@ -158,7 +158,7 @@ export default function Farms() {
       rate_of_water_giving: 1,
       source_of_water: 1,
       farm_hygiene_score: 3,
-      fertility_camp_no: 0,
+      fertility_camp_no: 1,
       total_number_of_cows: 0,
       number_of_calves: 0,
       number_of_milking_cows: 0,

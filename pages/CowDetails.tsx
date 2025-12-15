@@ -741,13 +741,10 @@ export default function CowDetails() {
               </div>
               <div className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-center">
                 <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                  Age
+                  Date of Birth
                 </p>
                 <p className="text-xl font-bold">
-                  {age}{" "}
-                  <span className="text-xs font-normal text-slate-500">
-                    yrs
-                  </span>
+                  {cow.date_of_birth ? new Date(cow.date_of_birth).toLocaleDateString() : "N/A"}
                 </p>
               </div>
             </div>
@@ -1101,6 +1098,36 @@ export default function CowDetails() {
                             {cow.last_date_insemination || "N/A"}
                           </span>
                         </div>
+                        <div className="flex justify-between border-b border-blue-200/50 pb-2">
+                          <span className="text-blue-600/70">
+                            Insemination Date
+                          </span>
+                          <span className="font-bold text-blue-900 dark:text-blue-100">
+                            {(() => {
+                              const latestRecord = reproRecords
+                                ?.filter((r: any) => r.recorded_date)
+                                ?.sort((a: any, b: any) => new Date(b.recorded_date).getTime() - new Date(a.recorded_date).getTime())[0];
+                              return latestRecord?.recorded_date
+                                ? new Date(latestRecord.recorded_date).toLocaleDateString()
+                                : "N/A";
+                            })()}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-b border-blue-200/50 pb-2">
+                          <span className="text-blue-600/70">
+                            Insemination Time
+                          </span>
+                          <span className="font-bold text-blue-900 dark:text-blue-100">
+                            {(() => {
+                              const latestRecord = reproRecords
+                                ?.filter((r: any) => r.recorded_date)
+                                ?.sort((a: any, b: any) => new Date(b.recorded_date).getTime() - new Date(a.recorded_date).getTime())[0];
+                              return latestRecord?.recorded_date
+                                ? new Date(latestRecord.recorded_date).toLocaleTimeString()
+                                : "N/A";
+                            })()}
+                          </span>
+                        </div>
                         <div className="flex justify-between">
                           <span className="text-blue-600/70">
                             Bull/Semen ID
@@ -1112,6 +1139,48 @@ export default function CowDetails() {
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* Pregnancy Information Card */}
+                  {reproRecords && reproRecords.some((r: any) => r.is_cow_pregnant) && (
+                    <Card className="bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900">
+                      <CardContent className="p-6">
+                        <div className="flex items-center gap-3 mb-4 text-amber-700 dark:text-amber-300">
+                          <Calendar className="h-5 w-5" />
+                          <h3 className="font-bold">Pregnancy Info</h3>
+                        </div>
+                        <div className="space-y-3 text-sm">
+                          <div className="flex justify-between border-b border-amber-200/50 pb-2">
+                            <span className="text-amber-600/70">
+                              Pregnancy Date
+                            </span>
+                            <span className="font-bold text-amber-900 dark:text-amber-100">
+                              {reproRecords.find((r: any) => r.is_cow_pregnant)?.pregnancy_date 
+                                ? new Date(reproRecords.find((r: any) => r.is_cow_pregnant)!.pregnancy_date).toLocaleDateString()
+                                : "N/A"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between border-b border-amber-200/50 pb-2">
+                            <span className="text-amber-600/70">
+                              Service/Conception
+                            </span>
+                            <span className="font-bold text-amber-900 dark:text-amber-100">
+                              {cow.number_of_inseminations || "N/A"}
+                            </span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span className="text-amber-600/70">
+                              Expected Calving
+                            </span>
+                            <span className="font-bold text-amber-900 dark:text-amber-100">
+                              {reproRecords.find((r: any) => r.is_cow_pregnant)?.calving_date 
+                                ? new Date(reproRecords.find((r: any) => r.is_cow_pregnant)!.calving_date).toLocaleDateString()
+                                : "N/A"}
+                            </span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
 
                   <Card className="bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900">
                     <CardContent className="p-6">
@@ -1126,6 +1195,16 @@ export default function CowDetails() {
                           </span>
                           <span className="font-bold text-purple-900 dark:text-purple-100">
                             {cow.last_calving_date || "N/A"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between border-b border-purple-200/50 pb-2">
+                          <span className="text-purple-600/70">
+                            Calving Date
+                          </span>
+                          <span className="font-bold text-purple-900 dark:text-purple-100">
+                            {reproRecords?.find((r: any) => r.calving_date)?.calving_date
+                              ? new Date(reproRecords.find((r: any) => r.calving_date)!.calving_date).toLocaleDateString()
+                              : "N/A"}
                           </span>
                         </div>
                         <div className="flex justify-between border-b border-purple-200/50 pb-2">

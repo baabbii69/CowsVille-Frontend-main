@@ -326,8 +326,29 @@ export default function FarmDetails() {
     if (!medicalRecords) return [];
     if (!medicalSearchTerm) return medicalRecords;
     const term = medicalSearchTerm.toLowerCase();
+    
+    // Create a cow lookup map from allCows
+    const cowLookup = new Map();
+    if (allCows) {
+      allCows.forEach(cow => {
+        cowLookup.set(cow.id, cow.cow_id); // Map number ID to cow_id
+        cowLookup.set(String(cow.id), cow.cow_id); // Map string ID to cow_id
+        cowLookup.set(cow.cow_id, cow.cow_id); // Map cow_id to itself
+      });
+    }
+    
     return medicalRecords.filter((r) => {
-      const cowId = typeof r.cow === "string" ? r.cow : (r.cow as any).cow_id;
+      // Get cow ID from various possible formats
+      let cowId = "";
+      if (typeof r.cow === "number") {
+        cowId = cowLookup.get(r.cow) || String(r.cow);
+      } else if (typeof r.cow === "string") {
+        cowId = cowLookup.get(r.cow) || cowLookup.get(Number(r.cow)) || r.cow;
+      } else if (r.cow) {
+        const cowRef = (r.cow as any)?.id || (r.cow as any)?.cow_id;
+        cowId = cowLookup.get(cowRef) || (r.cow as any)?.cow_id || "";
+      }
+      
       const diagnosis = r.diagnosis || "";
       const notes = r.notes || "";
       return (
@@ -336,7 +357,7 @@ export default function FarmDetails() {
         notes.toLowerCase().includes(term)
       );
     });
-  }, [medicalRecords, medicalSearchTerm]);
+  }, [medicalRecords, medicalSearchTerm, allCows]);
 
   const { data: housingTypes } = useQuery({
     queryKey: ["housing"],
@@ -531,24 +552,37 @@ export default function FarmDetails() {
   // Parse GPS from Kobo (space separated) or Standard (comma separated)
   const parseGPS = (gpsString?: string) => {
     if (!gpsString) return null;
+    
     // Kobo/ODK: "lat lon alt acc"
     const koboParts = gpsString.trim().split(" ");
     if (koboParts.length >= 2 && !gpsString.includes(",")) {
+      const lat = parseFloat(koboParts[0]);
+      const lon = parseFloat(koboParts[1]);
+      const alt = koboParts.length >= 3 ? parseFloat(koboParts[2]) : null;
+      const acc = koboParts.length >= 4 ? parseFloat(koboParts[3]) : null;
+      
       return {
         lat: koboParts[0],
         lon: koboParts[1],
-        display: `${parseFloat(koboParts[0]).toFixed(5)}, ${parseFloat(
-          koboParts[1]
-        ).toFixed(5)}`,
+        altitude: alt,
+        accuracy: acc,
+        display: `${lat.toFixed(6)}, ${lon.toFixed(6)}`,
+        fullDisplay: `Lat: ${lat.toFixed(6)}, Lon: ${lon.toFixed(6)}${
+          alt !== null ? `, Alt: ${alt.toFixed(1)}m` : ""
+        }${acc !== null ? `, Acc: ±${acc.toFixed(1)}m` : ""}`,
       };
     }
+    
     // Standard: "lat, lon"
     const commaParts = gpsString.split(",");
     if (commaParts.length === 2) {
       return {
         lat: commaParts[0].trim(),
         lon: commaParts[1].trim(),
+        altitude: null,
+        accuracy: null,
         display: gpsString,
+        fullDisplay: gpsString,
       };
     }
     return null;
@@ -824,35 +858,42 @@ export default function FarmDetails() {
                           </a>
                         )}
                       </div>
-                      <p className="font-mono text-xs font-medium bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded inline-block mt-1 text-slate-600 dark:text-slate-300">
-                        {gpsData
-                          ? gpsData.display
-                          : farm.location_gps || "Not Set"}
-                      </p>
+                      {gpsData ? (
+                        <div className="space-y-2 mt-1">
+                          <p className="font-mono text-xs font-medium bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded inline-block text-slate-600 dark:text-slate-300">
+                            {gpsData.display}
+                          </p>
+                          {(gpsData.altitude !== null || gpsData.accuracy !== null) && (
+                            <div className="flex gap-2 flex-wrap">
+                              {gpsData.altitude !== null && (
+                                <span className="text-[10px] bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full font-medium">
+                                  Alt: {gpsData.altitude.toFixed(1)}m
+                                </span>
+                              )}
+                              {gpsData.accuracy !== null && (
+                                <span className="text-[10px] bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full font-medium">
+                                  Acc: ±{gpsData.accuracy.toFixed(1)}m
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="font-mono text-xs font-medium bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded inline-block mt-1 text-slate-400">
+                          {farm.location_gps || "Not Set"}
+                        </p>
+                      )}
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
-                      <p className="text-[10px] text-slate-400 uppercase font-bold">
-                        Cluster
+                  <div className="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
+                    <p className="text-[10px] text-slate-400 uppercase font-bold">
+                      Fert. Camp (cluster)
+                    </p>
+                    <div className="flex items-center gap-1 mt-0.5">
+                      <Tent className="h-3 w-3 text-slate-400" />
+                      <p className="font-bold text-slate-900 dark:text-white text-sm">
+                        #{farm.fertility_camp_no}
                       </p>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <Layers className="h-3 w-3 text-slate-400" />
-                        <p className="font-bold text-slate-900 dark:text-white text-sm">
-                          {farm.cluster_number || "-"}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="bg-slate-50 dark:bg-slate-800 p-2 rounded-lg border border-slate-100 dark:border-slate-700">
-                      <p className="text-[10px] text-slate-400 uppercase font-bold">
-                        Fert. Camp
-                      </p>
-                      <div className="flex items-center gap-1 mt-0.5">
-                        <Tent className="h-3 w-3 text-slate-400" />
-                        <p className="font-bold text-slate-900 dark:text-white text-sm">
-                          #{farm.fertility_camp_no}
-                        </p>
-                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -1376,11 +1417,18 @@ export default function FarmDetails() {
                               ).toLocaleDateString()}
                             </td>
                             <td className="px-6 py-4 font-medium">
-                              {typeof record.cow === "string"
-                                ? record.cow
-                                : (record.cow as any).cow_id ||
-                                  (record.cow as any).id ||
-                                  "Unknown"}
+                              {(() => {
+                                // Check if cow field is a number or string (database ID)
+                                if (typeof record.cow === "number" || typeof record.cow === "string") {
+                                  // Look up the cow_id from allCows using the database ID
+                                  const cow = allCows?.find(c => c.id === record.cow || String(c.id) === String(record.cow));
+                                  return cow?.cow_id || `ID: ${record.cow}`;
+                                }
+                                // Otherwise try to extract from cow object
+                                return (record.cow as any)?.cow_id || 
+                                       (record.cow as any)?.id ||
+                                       "Unknown";
+                              })()}
                             </td>
                             <td className="px-6 py-4 text-slate-600 dark:text-slate-400">
                               {typeof record.assessed_by === "number"
