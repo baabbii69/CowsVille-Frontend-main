@@ -43,12 +43,12 @@ export default function ClusterPerformance() {
   // Extract Unique Clusters
   const clusters = useMemo(() => {
     if (!farms) return [];
-    const unique = new Set(farms.map((f) => f.cluster_number).filter(Boolean));
+    const unique = new Set(farms.map((f) => f.fertility_camp_no).filter(Boolean));
     return Array.from(unique).map((c) => ({
-      id: c as string,
-      farmCount: farms.filter((f) => f.cluster_number === c).length,
+      id: String(c),
+      farmCount: farms.filter((f) => f.fertility_camp_no === c).length,
       cowCount: farms
-        .filter((f) => f.cluster_number === c)
+        .filter((f) => f.fertility_camp_no === c)
         .reduce((acc, f) => acc + f.total_number_of_cows, 0),
     }));
   }, [farms]);
@@ -70,7 +70,7 @@ export default function ClusterPerformance() {
     if (!activeClusterId || !farms || !cows) return null;
 
     const clusterFarms = farms.filter(
-      (f) => f.cluster_number === activeClusterId
+      (f) => f.fertility_camp_no === Number(activeClusterId)
     );
     const clusterFarmIds = new Set(clusterFarms.map((f) => f.farm_id));
     const clusterCows = cows.filter((c) => {
@@ -234,13 +234,15 @@ export default function ClusterPerformance() {
 
         {selectedCluster && (
           <Button
-            variant="outline"
+            variant="default"
             onClick={() => {
               setSelectedCluster(null);
               setSearchTerm("");
             }}
+            className="flex items-center gap-2"
           >
-            View All Clusters
+            <ChevronRight className="h-4 w-4 rotate-180" />
+            Back to All Clusters
           </Button>
         )}
       </div>
@@ -387,6 +389,60 @@ export default function ClusterPerformance() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Farms List */}
+          <Card className="overflow-hidden border-t-4 border-t-green-500 shadow-md">
+            <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
+              <CardTitle className="flex items-center gap-2">
+                <Tractor className="h-5 w-5 text-green-600" />
+                Farms in this Cluster
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left min-w-[600px]">
+                  <thead className="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
+                    <tr>
+                      <th className="px-4 md:px-6 py-4 font-semibold">
+                        Farm Name
+                      </th>
+                      <th className="px-4 md:px-6 py-4 font-semibold">
+                        Location
+                      </th>
+                      <th className="px-4 md:px-6 py-4 font-semibold">
+                        Total Cows
+                      </th>
+                      <th className="px-4 md:px-6 py-4 font-semibold">
+                        Daily Milk (L)
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {farms
+                      .filter((f) => f.fertility_camp_no === Number(activeClusterId))
+                      .map((farm) => (
+                        <tr key={farm.farm_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                          <td className="px-4 md:px-6 py-4 font-medium text-slate-900 dark:text-white">
+                            {farm.owner_name}
+                          </td>
+                          <td className="px-4 md:px-6 py-4 text-slate-700 dark:text-slate-300">
+                            {farm.address || 'N/A'}
+                          </td>
+                          <td className="px-4 md:px-6 py-4">
+                            <Badge variant="info">
+                              {farm.total_number_of_cows} cows
+                            </Badge>
+                          </td>
+                          <td className="px-4 md:px-6 py-4 font-bold text-blue-600">
+                            {farm.total_daily_milk.toFixed(1)} L
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* KPIs Table */}
           <Card className="overflow-hidden border-t-4 border-t-primary-500 shadow-md">
