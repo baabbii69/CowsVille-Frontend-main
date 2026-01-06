@@ -749,6 +749,15 @@ export const CowService = {
     });
     return resolveResponseData(response);
   },
+  getInseminationRecords: async (cowId: string) => {
+    if (isDemo) {
+      return Promise.resolve([]);
+    }
+    const response = await api.get(`/insemination-records/`, {
+      params: { cow: cowId },
+    });
+    return resolveResponseData(response);
+  },
 };
 
 export default api;

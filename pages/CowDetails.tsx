@@ -626,6 +626,12 @@ export default function CowDetails() {
     enabled: !!id,
   });
 
+  const { data: insemRecords } = useQuery({
+    queryKey: ["insem-records", id],
+    queryFn: () => CowService.getInseminationRecords(id!),
+    enabled: !!id,
+  });
+
   const { data: breeds } = useQuery({
     queryKey: ["breeds"],
     queryFn: DataService.getBreedTypes,
@@ -1115,27 +1121,20 @@ export default function CowDetails() {
                           </span>
                           <span className="font-bold text-blue-900 dark:text-blue-100">
                             {(() => {
-                              const latestRecord = reproRecords
+                              const latestRecord = insemRecords
                                 ?.filter((r: any) => r.recorded_date)
                                 ?.sort((a: any, b: any) => new Date(b.recorded_date).getTime() - new Date(a.recorded_date).getTime())[0];
-                              return latestRecord?.recorded_date
-                                ? new Date(latestRecord.recorded_date).toLocaleDateString()
-                                : "N/A";
-                            })()}
-                          </span>
-                        </div>
-                        <div className="flex justify-between border-b border-blue-200/50 pb-2">
-                          <span className="text-blue-600/70">
-                            Insemination Time
-                          </span>
-                          <span className="font-bold text-blue-900 dark:text-blue-100">
-                            {(() => {
-                              const latestRecord = reproRecords
-                                ?.filter((r: any) => r.recorded_date)
-                                ?.sort((a: any, b: any) => new Date(b.recorded_date).getTime() - new Date(a.recorded_date).getTime())[0];
-                              return latestRecord?.recorded_date
-                                ? new Date(latestRecord.recorded_date).toLocaleTimeString()
-                                : "N/A";
+                              
+                              if (latestRecord?.date_of_insemination) {
+                                return new Date(latestRecord.date_of_insemination).toLocaleDateString();
+                              }
+                              
+                              if (latestRecord?.recorded_date) {
+                                const localDateStr = latestRecord.recorded_date.replace('Z', '');
+                                return new Date(localDateStr).toLocaleDateString();
+                              }
+                              
+                              return "N/A";
                             })()}
                           </span>
                         </div>
