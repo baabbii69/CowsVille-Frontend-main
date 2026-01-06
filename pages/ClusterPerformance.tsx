@@ -29,6 +29,7 @@ import { motion, AnimatePresence } from "framer-motion";
 export default function ClusterPerformance() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
+  const [isFarmsListCollapsed, setIsFarmsListCollapsed] = useState(false);
 
   // Fetch all data
   const { data: farms, isLoading: farmsLoading } = useQuery({
@@ -222,7 +223,27 @@ export default function ClusterPerformance() {
   return (
     <div className="space-y-8 pb-10">
       {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+      <div className="space-y-4">
+        {/* Breadcrumb Navigation */}
+        {selectedCluster && (
+          <nav className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+            <button
+              onClick={() => {
+                setSelectedCluster(null);
+                setSearchTerm("");
+              }}
+              className="hover:text-primary-600 dark:hover:text-primary-400 flex items-center gap-1 transition-colors"
+            >
+              Cluster Analytics
+            </button>
+            <ChevronRight className="h-4 w-4" />
+            <span className="text-slate-900 dark:text-white font-medium">
+              Cluster {selectedCluster}
+            </span>
+          </nav>
+        )}
+        
+        {/* Title - Left aligned */}
         <div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-900 dark:text-white">
             Cluster Analytics
@@ -231,20 +252,6 @@ export default function ClusterPerformance() {
             Aggregate performance indicators across farm clusters.
           </p>
         </div>
-
-        {selectedCluster && (
-          <Button
-            variant="default"
-            onClick={() => {
-              setSelectedCluster(null);
-              setSearchTerm("");
-            }}
-            className="flex items-center gap-2"
-          >
-            <ChevronRight className="h-4 w-4 rotate-180" />
-            Back to All Clusters
-          </Button>
-        )}
       </div>
 
       {/* Search / Selection Area */}
@@ -390,61 +397,7 @@ export default function ClusterPerformance() {
             </Card>
           </div>
 
-          {/* Farms List */}
-          <Card className="overflow-hidden border-t-4 border-t-green-500 shadow-md">
-            <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
-              <CardTitle className="flex items-center gap-2">
-                <Tractor className="h-5 w-5 text-green-600" />
-                Farms in this Cluster
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm text-left min-w-[600px]">
-                  <thead className="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
-                    <tr>
-                      <th className="px-4 md:px-6 py-4 font-semibold">
-                        Farm Name
-                      </th>
-                      <th className="px-4 md:px-6 py-4 font-semibold">
-                        Location
-                      </th>
-                      <th className="px-4 md:px-6 py-4 font-semibold">
-                        Total Cows
-                      </th>
-                      <th className="px-4 md:px-6 py-4 font-semibold">
-                        Daily Milk (L)
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {farms
-                      .filter((f) => f.fertility_camp_no === Number(activeClusterId))
-                      .map((farm) => (
-                        <tr key={farm.farm_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                          <td className="px-4 md:px-6 py-4 font-medium text-slate-900 dark:text-white">
-                            {farm.owner_name}
-                          </td>
-                          <td className="px-4 md:px-6 py-4 text-slate-700 dark:text-slate-300">
-                            {farm.address || 'N/A'}
-                          </td>
-                          <td className="px-4 md:px-6 py-4">
-                            <Badge variant="info">
-                              {farm.total_number_of_cows} cows
-                            </Badge>
-                          </td>
-                          <td className="px-4 md:px-6 py-4 font-bold text-blue-600">
-                            {farm.total_daily_milk.toFixed(1)} L
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* KPIs Table */}
+          {/* Performance Indicators Table - NOW FIRST */}
           <Card className="overflow-hidden border-t-4 border-t-primary-500 shadow-md">
             <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
               <CardTitle className="flex items-center gap-2">
@@ -616,6 +569,82 @@ export default function ClusterPerformance() {
                 </table>
               </div>
             </CardContent>
+          </Card>
+
+          {/* Farms List - NOW SECOND with collapse */}
+          <Card className="overflow-hidden border-t-4 border-t-green-500 shadow-md">
+            <CardHeader className="bg-slate-50/50 dark:bg-slate-900/50 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2">
+                  <Tractor className="h-5 w-5 text-green-600" />
+                  Farms in this Cluster ({farms.filter((f) => f.fertility_camp_no === Number(activeClusterId)).length})
+                </CardTitle>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setIsFarmsListCollapsed(!isFarmsListCollapsed)}
+                  className="flex items-center gap-1"
+                >
+                  {isFarmsListCollapsed ? (
+                    <>
+                      <ChevronRight className="h-4 w-4" />
+                      Show
+                    </>
+                  ) : (
+                    <>
+                      <ChevronRight className="h-4 w-4 rotate-90" />
+                      Hide
+                    </>
+                  )}
+                </Button>
+              </div>
+            </CardHeader>
+            {!isFarmsListCollapsed && (
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm text-left min-w-[600px]">
+                    <thead className="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
+                      <tr>
+                        <th className="px-4 md:px-6 py-4 font-semibold">
+                          Farm Name
+                        </th>
+                        <th className="px-4 md:px-6 py-4 font-semibold">
+                          Location
+                        </th>
+                        <th className="px-4 md:px-6 py-4 font-semibold">
+                          Total Cows
+                        </th>
+                        <th className="px-4 md:px-6 py-4 font-semibold">
+                          Daily Milk (L)
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                      {farms
+                        .filter((f) => f.fertility_camp_no === Number(activeClusterId))
+                        .map((farm) => (
+                          <tr key={farm.farm_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                            <td className="px-4 md:px-6 py-4 font-medium text-slate-900 dark:text-white">
+                              {farm.owner_name}
+                            </td>
+                            <td className="px-4 md:px-6 py-4 text-slate-700 dark:text-slate-300">
+                              {farm.address || 'N/A'}
+                            </td>
+                            <td className="px-4 md:px-6 py-4">
+                              <Badge variant="info">
+                                {farm.total_number_of_cows} cows
+                              </Badge>
+                            </td>
+                            <td className="px-4 md:px-6 py-4 font-bold text-blue-600">
+                              {farm.total_daily_milk.toFixed(1)} L
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            )}
           </Card>
         </motion.div>
       )}

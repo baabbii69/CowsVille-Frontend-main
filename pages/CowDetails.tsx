@@ -48,13 +48,18 @@ const FertilityWindowGraph = ({
   heatStartTime?: string | Date;
 }) => {
   // Mock start time if not provided (14 hours ago to show Green zone active)
-  const start = useMemo(
-    () =>
-      heatStartTime
-        ? new Date(heatStartTime)
-        : new Date(Date.now() - 1000 * 60 * 60 * 14),
-    [heatStartTime]
-  );
+  const start = useMemo(() => {
+    if (heatStartTime) {
+      // Parse the UTC time but treat it as Ethiopian local time
+      // The API sends "2026-01-06T12:00:00Z" which is UTC, but the time was entered in Ethiopian time
+      // So we need to parse it without timezone conversion
+      const dateStr = typeof heatStartTime === 'string' ? heatStartTime : heatStartTime.toISOString();
+      // Remove the 'Z' to prevent UTC conversion and parse as local time
+      const localDateStr = dateStr.replace('Z', '');
+      return new Date(localDateStr);
+    }
+    return new Date(Date.now() - 1000 * 60 * 60 * 14);
+  }, [heatStartTime]);
 
   const [now, setNow] = useState(new Date());
 
@@ -134,6 +139,7 @@ const FertilityWindowGraph = ({
               {start.toLocaleTimeString([], {
                 hour: "numeric",
                 minute: "2-digit",
+                hour12: true,
               })}
             </span>
           </div>
@@ -1071,7 +1077,12 @@ export default function CowDetails() {
                 {cow.status !== "Pregnant" && (
                   <Card className="border-l-4 border-l-violet-500 shadow-md bg-white dark:bg-slate-900 overflow-hidden">
                     <CardContent className="p-6">
-                      <FertilityWindowGraph />
+                      <FertilityWindowGraph 
+                        heatStartTime={reproRecords && reproRecords.length > 0 
+                          ? reproRecords[0]?.heat_sign_start 
+                          : undefined
+                        }
+                      />
                     </CardContent>
                   </Card>
                 )}
