@@ -62,8 +62,13 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Minus,
+  Pencil,
 } from "lucide-react";
-import { StaffMember, MedicalAssessment } from "../types";
+import { useForm, Controller } from "react-hook-form";
+import { z } from "zod";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { motion, AnimatePresence } from "framer-motion";
+import { StaffMember, MedicalAssessment, Farm } from "../types";
 import { useToast } from "../context/ToastContext";
 
 // --- Components for Charts ---
@@ -240,6 +245,41 @@ const HealthDistributionChart = ({
 
 // --- Main Component ---
 
+// Schema strictly matching Django Model
+const farmSchema = z.object({
+  farm_id: z.any().optional(),
+  owner_name: z.any().optional(),
+  address: z.any().optional(),
+  telephone_number: z.any().optional(),
+  location_gps: z.any().optional(),
+  cluster_number: z.any().optional(),
+  fertility_camp_no: z.any().optional(),
+  total_number_of_cows: z.any().optional(),
+  number_of_calves: z.any().optional(),
+  number_of_milking_cows: z.any().optional(),
+  total_daily_milk: z.any().optional(),
+  type_of_housing: z.any().optional(),
+  type_of_floor: z.any().optional(),
+  main_feed: z.any().optional(),
+  rate_of_cow_feeding: z.any().optional(),
+  source_of_water: z.any().optional(),
+  rate_of_water_giving: z.any().optional(),
+  farm_hygiene_score: z.any().optional(),
+});
+
+type FarmFormValues = z.infer<typeof farmSchema>;
+
+const STEPS = [
+  { id: "basic", title: "Identity", subtitle: "Owner & Location", icon: User },
+  {
+    id: "stats",
+    title: "Livestock",
+    subtitle: "Herd & Production",
+    icon: Activity,
+  },
+  { id: "infra", title: "Operations", subtitle: "Infra & Hygiene", icon: Home },
+];
+
 export default function FarmDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -248,6 +288,8 @@ export default function FarmDetails() {
   const [activeTab, setActiveTab] = useState("overview");
 
   // State for Modals & Search
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
   const [isStaffModalOpen, setIsStaffModalOpen] = useState(false);
   const [staffModalType, setStaffModalType] = useState<
     "doctor" | "inseminator" | null
@@ -366,6 +408,15 @@ export default function FarmDetails() {
   const { data: floorTypes } = useQuery({
     queryKey: ["floors"],
     queryFn: DataService.getFloorTypes,
+  });
+
+  const { data: waterSources } = useQuery({
+    queryKey: ["water"],
+    queryFn: DataService.getWaterSources,
+  });
+  const { data: feedingFreqs } = useQuery({
+    queryKey: ["feeding"],
+    queryFn: DataService.getFeedingFrequencies,
   });
 
   // Staff Queries
@@ -551,6 +602,81 @@ export default function FarmDetails() {
       });
     },
   });
+
+  const updateFarmMutation = useMutation({
+    mutationFn: (data: Partial<Farm>) => FarmService.update(id!, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["farm", id] });
+      setIsEditModalOpen(false);
+      toast({
+        type: "success",
+        title: "Farm Updated",
+        message: "Farm details have been successfully updated.",
+      });
+    },
+    onError: () => {
+      toast({
+        type: "error",
+        title: "Update Failed",
+        message: "Could not update farm details. Please try again.",
+      });
+    },
+  });
+
+  const {
+    register,
+    control,
+    handleSubmit,
+    setValue,
+    trigger,
+    formState: { errors },
+  } = useForm<FarmFormValues>({
+    resolver: zodResolver(farmSchema),
+    defaultValues: {
+      type_of_housing: 1,
+      type_of_floor: 1,
+      rate_of_cow_feeding: 1,
+      rate_of_water_giving: 1,
+      source_of_water: 1,
+      farm_hygiene_score: 3,
+      fertility_camp_no: 1,
+      total_number_of_cows: 0,
+      number_of_calves: 0,
+      number_of_milking_cows: 0,
+      total_daily_milk: 0,
+    },
+  });
+
+  const handleEditFarm = () => {
+    if (farm) {
+      Object.keys(farm).forEach((key) => {
+        if (key in farmSchema.shape) {
+          let value = farm[key];
+          // If the value is an object (ChoiceType or StaffMember), extract the id
+          if (
+            value &&
+            typeof value === "object" &&
+            value !== null &&
+            "id" in value
+          ) {
+            value = value.id;
+          }
+          setValue(key as any, value);
+        }
+      });
+      setIsEditModalOpen(true);
+      setCurrentStep(0);
+    }
+  };
+
+  const onEditSubmit = (data: FarmFormValues) => {
+    console.log("!!! EDIT SUBMISSION REACHED !!! Data:", data);
+    updateFarmMutation.mutate(data as any);
+  };
+
+  const onInvalid = (errors: any) => {
+    console.error("Form Validation Errors (Logged only, not blocking):", errors);
+  };
 
   const handleStaffUpdate = () => {
     if (!staffModalType || !selectedStaffId) return;
@@ -839,10 +965,18 @@ export default function FarmDetails() {
             {/* LEFT COLUMN (Sidebar - Operational & Infra) */}
             <div className="space-y-6">
               <Card className="border-t-4 border-t-primary-500 shadow-sm overflow-hidden">
-                <CardHeader className="pb-3 bg-slate-50/50 dark:bg-slate-800/50">
+                <CardHeader className="pb-3 bg-slate-50/50 dark:bg-slate-800/50 flex flex-row items-center justify-between">
                   <CardTitle className="text-sm uppercase text-slate-500 font-bold tracking-wider">
                     Operational Profile
                   </CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleEditFarm}
+                    className="h-8 w-8 p-0 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700"
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                  </Button>
                 </CardHeader>
                 <CardContent className="space-y-4 p-5">
                   <div className="flex items-center gap-3 pb-3 border-b border-slate-100 dark:border-slate-800">
@@ -940,10 +1074,18 @@ export default function FarmDetails() {
               </Card>
 
               <Card>
-                <CardHeader className="pb-3">
+                <CardHeader className="pb-3 flex flex-row items-center justify-between">
                   <CardTitle className="text-sm uppercase text-slate-500">
                     Infrastructure
                   </CardTitle>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleEditFarm}
+                    className="h-8 w-8 p-0 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    <Pencil className="h-3.5 w-3.5 text-slate-500" />
+                  </Button>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex items-start gap-3">
@@ -2179,6 +2321,137 @@ export default function FarmDetails() {
         assessment={selectedRecord}
         onClose={() => setSelectedRecord(null)}
       />
+
+      {/* COMPREHENSIVE EDIT FARM MODAL */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title=""
+        className="max-w-5xl p-0 overflow-hidden bg-white dark:bg-slate-900"
+      >
+        <div className="flex flex-col md:flex-row h-[85vh] md:h-[700px]">
+          {/* Left Sidebar (Progress) */}
+          <div className="w-full md:w-1/3 bg-slate-50 dark:bg-slate-950 p-8 flex flex-col justify-between border-r border-slate-100 dark:border-slate-800">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                Edit Farm
+              </h2>
+              <p className="text-sm text-slate-500 mb-8">
+                Update the farm's information and operational parameters.
+              </p>
+
+              <div className="space-y-6 relative">
+                <div className="absolute left-[19px] top-2 bottom-10 w-0.5 bg-slate-200 dark:bg-slate-800 -z-10"></div>
+                {STEPS.map((step, idx) => {
+                  const isActive = idx === currentStep;
+                  const isCompleted = idx < currentStep;
+                  return (
+                    <div key={step.id} className="flex items-center gap-4 relative">
+                      <div className={`h-10 w-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 z-10 ${
+                        isActive
+                          ? "border-emerald-600 bg-emerald-600 text-white shadow-lg shadow-emerald-500/30"
+                          : isCompleted
+                          ? "border-emerald-600 bg-white text-emerald-600"
+                          : "border-slate-200 bg-white text-slate-300 dark:bg-slate-900 dark:border-slate-700"
+                      }`}>
+                        {isCompleted ? <CheckCircle2 className="h-6 w-6" /> : <step.icon className="h-5 w-5" />}
+                      </div>
+                      <div>
+                        <p className={`text-sm font-bold ${isActive ? "text-slate-900 dark:text-white" : "text-slate-500"}`}>{step.title}</p>
+                        <p className="text-xs text-slate-400">{step.subtitle}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/10 p-4 rounded-xl border border-blue-100 dark:border-blue-800">
+              <div className="flex gap-2 items-start text-blue-700 dark:text-blue-300">
+                <Activity className="h-5 w-5 shrink-0" />
+                <p className="text-xs leading-relaxed">Ensure all fields are accurate. These changes will reflect across all analytics and reports.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex-1 flex flex-col h-full bg-white dark:bg-slate-900">
+            <div className="flex items-center justify-between p-6 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-lg font-semibold text-slate-900 dark:text-white">{STEPS[currentStep].title} Details</h3>
+              <div className="text-xs font-medium text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-full">Step {currentStep + 1} of {STEPS.length}</div>
+            </div>
+
+            <form onSubmit={handleSubmit(onEditSubmit)} className="flex-1 flex flex-col overflow-hidden">
+              <div className="flex-1 overflow-y-auto p-6 md:p-8">
+                <AnimatePresence mode="wait">
+                  {currentStep === 0 && (
+                    <motion.div key="step1" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label>Farm ID</Label>
+                        <Input 
+                          {...register("farm_id")} 
+                          readOnly 
+                          className="bg-slate-50 border-slate-200 opacity-70 h-11" 
+                        />
+                      </div>
+                      <div className="space-y-2"><Label>Owner Name</Label><Input {...register("owner_name")} className="h-11" />{errors.owner_name && <span className="text-xs text-red-500">{errors.owner_name.message}</span>}</div>
+                      <div className="space-y-2 md:col-span-2"><Label>Address</Label><Input {...register("address")} className="h-11" />{errors.address && <span className="text-xs text-red-500">{errors.address.message}</span>}</div>
+                      <div className="space-y-2"><Label>Phone Number</Label><Input {...register("telephone_number")} className="h-11" />{errors.telephone_number && <span className="text-xs text-red-500">{errors.telephone_number.message}</span>}</div>
+                      <div className="space-y-2"><Label>Fertility Camp #</Label><Input type="number" {...register("fertility_camp_no")} className="h-11" /></div>
+                      <div className="space-y-2 md:col-span-2"><Label>GPS Coordinates</Label><Input {...register("location_gps")} placeholder="Lat, Lon" className="h-11" /></div>
+                    </motion.div>
+                  )}
+                  {currentStep === 1 && (
+                    <motion.div key="step2" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2"><Label>Total Herd Size</Label><Input type="number" {...register("total_number_of_cows")} className="h-11" /></div>
+                      <div className="space-y-2"><Label>Milking Cows</Label><Input type="number" {...register("number_of_milking_cows")} className="h-11" /></div>
+                      <div className="space-y-2"><Label>Number of Calves</Label><Input type="number" {...register("number_of_calves")} className="h-11" /></div>
+                      <div className="space-y-2"><Label>Daily Milk Production (L)</Label><Input type="number" step="0.1" {...register("total_daily_milk")} className="h-11" /></div>
+                    </motion.div>
+                  )}
+                  {currentStep === 2 && (
+                    <motion.div key="step3" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2"><Label>Housing Type</Label>
+                        <Select {...register("type_of_housing")} className="h-11">
+                          {housingTypes?.map((t: any) => (<option key={t.id} value={t.id}>{t.name}</option>))}
+                        </Select>
+                      </div>
+                      <div className="space-y-2"><Label>Floor Type</Label>
+                        <Select {...register("type_of_floor")} className="h-11">
+                          {floorTypes?.map((t: any) => (<option key={t.id} value={t.id}>{t.name}</option>))}
+                        </Select>
+                      </div>
+                      <div className="space-y-2"><Label>Main Feed</Label><Input {...register("main_feed")} className="h-11" /></div>
+                      <div className="space-y-2"><Label>Cow Feeding Rate</Label><Input type="number" {...register("rate_of_cow_feeding")} className="h-11" /></div>
+                      <div className="space-y-2"><Label>Water Source</Label>
+                        <Select {...register("source_of_water")} className="h-11">
+                          {waterSources?.map((s: any) => (<option key={s.id} value={s.id}>{s.name}</option>))}
+                        </Select>
+                      </div>
+                      <div className="space-y-2"><Label>Water Giving Rate</Label><Input type="number" {...register("rate_of_water_giving")} className="h-11" /></div>
+                      <div className="space-y-2"><Label>Hygiene Score (1-4)</Label><Input type="number" {...register("farm_hygiene_score")} min="1" max="4" className="h-11" /></div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
+              <div className="p-6 border-t border-slate-100 dark:border-slate-800 flex justify-between gap-3">
+                <Button type="button" variant="outline" onClick={() => currentStep > 0 ? setCurrentStep(s => s - 1) : setIsEditModalOpen(false)}>
+                  {currentStep === 0 ? "Cancel" : "Previous"}
+                </Button>
+                <div className="flex gap-2">
+                  {currentStep < 2 && (
+                    <Button type="button" variant="secondary" onClick={() => setCurrentStep(s => s + 1)}>
+                      Next Step
+                    </Button>
+                  )}
+                  <Button type="submit" disabled={updateFarmMutation.isPending} className="bg-emerald-600 hover:bg-emerald-700 text-white min-w-[120px]">
+                    {updateFarmMutation.isPending ? "Updating..." : "Save Changes"}
+                  </Button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

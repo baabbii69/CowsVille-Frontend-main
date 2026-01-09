@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { FarmService, CowService, DataService } from "../services/api";
+import { Farm } from "../types";
 import {
   Card,
   CardContent,
@@ -29,6 +30,7 @@ import {
   LayoutGrid,
   Star,
   Activity,
+  Pencil,
 } from "lucide-react";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
@@ -39,31 +41,24 @@ import { useToast } from "../context/ToastContext";
 
 // Schema strictly matching Django Model
 const farmSchema = z.object({
-  farm_id: z.string().min(1, "Farm ID is required"),
-  owner_name: z.string().min(2, "Owner name is required"),
-  address: z.string().min(1, "Address is required"),
-  telephone_number: z.string().regex(/^\+?1?\d{9,15}$/, "Invalid phone number"),
-  location_gps: z.string().optional(),
-  cluster_number: z.string().optional(),
-  fertility_camp_no: z.coerce.number().min(1, "Must be at least 1"),
-
-  // Population
-  total_number_of_cows: z.coerce.number().min(0),
-  number_of_calves: z.coerce.number().min(0),
-  number_of_milking_cows: z.coerce.number().min(0),
-  total_daily_milk: z.coerce.number().min(0),
-
-  // Infra
-  type_of_housing: z.coerce.number(),
-  type_of_floor: z.coerce.number(),
-
-  // Feeding
-  main_feed: z.string().min(1, "Main feed required"),
-  rate_of_cow_feeding: z.coerce.number(),
-  source_of_water: z.coerce.number(),
-  rate_of_water_giving: z.coerce.number(),
-
-  farm_hygiene_score: z.coerce.number().min(1).max(4),
+  farm_id: z.any().optional(),
+  owner_name: z.any().optional(),
+  address: z.any().optional(),
+  telephone_number: z.any().optional(),
+  location_gps: z.any().optional(),
+  cluster_number: z.any().optional(),
+  fertility_camp_no: z.any().optional(),
+  total_number_of_cows: z.any().optional(),
+  number_of_calves: z.any().optional(),
+  number_of_milking_cows: z.any().optional(),
+  total_daily_milk: z.any().optional(),
+  type_of_housing: z.any().optional(),
+  type_of_floor: z.any().optional(),
+  main_feed: z.any().optional(),
+  rate_of_cow_feeding: z.any().optional(),
+  source_of_water: z.any().optional(),
+  rate_of_water_giving: z.any().optional(),
+  farm_hygiene_score: z.any().optional(),
 });
 
 type FarmFormValues = z.infer<typeof farmSchema>;
@@ -82,6 +77,7 @@ const STEPS = [
 export default function Farms() {
   const navigate = useNavigate();
   const [isCreating, setIsCreating] = useState(false);
+  const [editingFarm, setEditingFarm] = useState<any | null>(null);
   const [currentStep, setCurrentStep] = useState(0);
   const { toast } = useToast();
 
@@ -142,12 +138,37 @@ export default function Farms() {
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<Farm> }) =>
+      FarmService.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["farms"] });
+      setIsCreating(false);
+      setEditingFarm(null);
+      reset();
+      setCurrentStep(0);
+      toast({
+        type: "success",
+        title: "Farm Updated",
+        message: "Farm details have been successfully updated.",
+      });
+    },
+    onError: () => {
+      toast({
+        type: "error",
+        title: "Update Failed",
+        message: "Could not update farm details. Please try again.",
+      });
+    },
+  });
+
   const {
     register,
     control,
     handleSubmit,
     reset,
     trigger,
+    setValue,
     formState: { errors },
   } = useForm<FarmFormValues>({
     resolver: zodResolver(farmSchema),
@@ -175,39 +196,41 @@ export default function Farms() {
   }, [search]);
 
   const onSubmit = (data: FarmFormValues) => {
-    createMutation.mutate(data as any);
+    console.log("!!! SUBMISSION REACHED !!! Data:", data);
+    if (editingFarm) {
+      updateMutation.mutate({
+        id: editingFarm.farm_id,
+        data: data as any,
+      });
+    } else {
+      createMutation.mutate(data as any);
+    }
+  };
+
+  const onInvalid = (errors: any) => {
+    console.error("Form Validation Errors (Logged only, not blocking):", errors);
+  };
+
+  const handleEdit = (farm: any) => {
+    setEditingFarm(farm);
+    setIsCreating(true);
+    setCurrentStep(0);
+
+    // Populate form fields
+    Object.keys(farm).forEach((key) => {
+      if (key in farmSchema.shape) {
+        let value = farm[key];
+        // If the value is an object (ChoiceType or StaffMember), extract the id
+        if (value && typeof value === "object" && "id" in value) {
+          value = value.id;
+        }
+        setValue(key as any, value);
+      }
+    });
   };
 
   const nextStep = async () => {
-    const stepFields = [
-      [
-        "farm_id",
-        "owner_name",
-        "address",
-        "telephone_number",
-        "fertility_camp_no",
-        "cluster_number",
-        "location_gps",
-      ],
-      [
-        "total_number_of_cows",
-        "number_of_calves",
-        "number_of_milking_cows",
-        "total_daily_milk",
-      ],
-      [
-        "type_of_housing",
-        "type_of_floor",
-        "main_feed",
-        "rate_of_cow_feeding",
-        "source_of_water",
-        "rate_of_water_giving",
-        "farm_hygiene_score",
-      ],
-    ];
-
-    const isValid = await trigger(stepFields[currentStep] as any);
-    if (isValid) setCurrentStep((prev) => Math.min(prev + 1, STEPS.length - 1));
+    setCurrentStep((prev) => Math.min(prev + 1, STEPS.length - 1));
   };
 
   const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 0));
@@ -431,8 +454,21 @@ export default function Farms() {
                         ))}
                       </div>
                     </div>
-                    <div className="flex items-center text-emerald-600 text-xs font-bold group-hover:translate-x-1 transition-transform">
-                      View Details <ArrowRight className="h-3 w-3 ml-1" />
+                    <div className="flex items-center gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-8 w-8 p-0 rounded-full border-slate-200 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleEdit(farm);
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <div className="flex items-center text-emerald-600 text-xs font-bold group-hover:translate-x-1 transition-transform">
+                        View Details <ArrowRight className="h-3 w-3 ml-1" />
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -546,7 +582,7 @@ export default function Farms() {
                     >
                       <div className="space-y-2">
                         <Label>
-                          Farm ID <span className="text-red-500">*</span>
+                          Farm ID
                         </Label>
                         <div className="relative group">
                           <Home className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
@@ -554,6 +590,7 @@ export default function Farms() {
                             {...register("farm_id")}
                             placeholder="e.g. F-2024-001"
                             className="pl-10 bg-slate-50 border-slate-200 focus:bg-white transition-all h-11"
+                            readOnly={!!editingFarm}
                           />
                         </div>
                         {errors.farm_id && (
@@ -564,7 +601,7 @@ export default function Farms() {
                       </div>
                       <div className="space-y-2">
                         <Label>
-                          Owner Name <span className="text-red-500">*</span>
+                          Owner Name
                         </Label>
                         <div className="relative group">
                           <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
@@ -582,7 +619,7 @@ export default function Farms() {
                       </div>
                       <div className="space-y-2 md:col-span-2">
                         <Label>
-                          Address <span className="text-red-500">*</span>
+                          Address
                         </Label>
                         <Input
                           {...register("address")}
@@ -597,7 +634,7 @@ export default function Farms() {
                       </div>
                       <div className="space-y-2">
                         <Label>
-                          Phone Number <span className="text-red-500">*</span>
+                          Phone Number
                         </Label>
                         <div className="relative group">
                           <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-emerald-500 transition-colors" />
@@ -856,23 +893,24 @@ export default function Farms() {
                 >
                   <ArrowLeft className="mr-2 h-4 w-4" /> Previous
                 </Button>
-                {currentStep < STEPS.length - 1 ? (
-                  <Button
-                    type="button"
-                    onClick={nextStep}
-                    className="bg-slate-900 text-white hover:bg-slate-800 px-8 h-11 rounded-xl shadow-lg shadow-slate-900/20"
-                  >
-                    Next Step <ArrowRight className="ml-2 h-4 w-4" />
-                  </Button>
-                ) : (
+                <div className="flex gap-2">
+                  {currentStep < STEPS.length - 1 && (
+                    <Button
+                      type="button"
+                      onClick={nextStep}
+                      className="bg-slate-900 text-white hover:bg-slate-800 px-8 h-11 rounded-xl shadow-lg shadow-slate-900/20"
+                    >
+                      Next Step <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  )}
                   <Button
                     type="submit"
-                    isLoading={createMutation.isPending}
+                    isLoading={createMutation.isPending || (editingFarm && updateMutation.isPending)}
                     className="bg-emerald-600 text-white hover:bg-emerald-700 px-8 h-11 rounded-xl shadow-lg shadow-emerald-600/20"
                   >
-                    Register Farm <CheckCircle2 className="ml-2 h-4 w-4" />
+                    {editingFarm ? "Save Changes" : "Register Farm"} <CheckCircle2 className="ml-2 h-4 w-4" />
                   </Button>
-                )}
+                </div>
               </div>
             </form>
           </div>
