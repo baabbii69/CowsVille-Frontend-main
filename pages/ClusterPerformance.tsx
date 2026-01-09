@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
 import { FarmService, CowService } from "../services/api";
 import {
   Card,
@@ -30,6 +31,7 @@ export default function ClusterPerformance() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCluster, setSelectedCluster] = useState<string | null>(null);
   const [isFarmsListCollapsed, setIsFarmsListCollapsed] = useState(false);
+  const navigate = useNavigate();
 
   // Fetch all data
   const { data: farms, isLoading: farmsLoading } = useQuery({
@@ -606,6 +608,9 @@ export default function ClusterPerformance() {
                     <thead className="text-xs text-slate-500 uppercase bg-slate-50 dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800">
                       <tr>
                         <th className="px-4 md:px-6 py-4 font-semibold">
+                          Farm ID
+                        </th>
+                        <th className="px-4 md:px-6 py-4 font-semibold">
                           Farm Name
                         </th>
                         <th className="px-4 md:px-6 py-4 font-semibold">
@@ -623,7 +628,14 @@ export default function ClusterPerformance() {
                       {farms
                         .filter((f) => f.fertility_camp_no === Number(activeClusterId))
                         .map((farm) => (
-                          <tr key={farm.farm_id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                          <tr 
+                            key={farm.farm_id} 
+                            onClick={() => navigate(`/farms/${farm.farm_id}`)}
+                            className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                          >
+                            <td className="px-4 md:px-6 py-4 font-mono text-xs font-bold text-primary-600">
+                              {farm.farm_id}
+                            </td>
                             <td className="px-4 md:px-6 py-4 font-medium text-slate-900 dark:text-white">
                               {farm.owner_name}
                             </td>

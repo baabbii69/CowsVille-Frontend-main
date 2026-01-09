@@ -640,6 +640,18 @@ export default function CowDetails() {
     queryKey: ["gyne"],
     queryFn: DataService.getGynecologicalStatuses,
   });
+  const { data: generalHealthStatuses } = useQuery({
+    queryKey: ["general-health"],
+    queryFn: DataService.getGeneralHealthStatuses,
+  });
+  const { data: udderHealthStatuses } = useQuery({
+    queryKey: ["udder-health"],
+    queryFn: DataService.getUdderHealthStatuses,
+  });
+  const { data: mastitisStatuses } = useQuery({
+    queryKey: ["mastitis-health"],
+    queryFn: DataService.getMastitisStatuses,
+  });
 
   // Resolve Relations
   const breedName =
@@ -874,7 +886,9 @@ export default function CowDetails() {
                     latestAssessment
                       ? typeof latestAssessment.general_health === "object"
                         ? latestAssessment.general_health.name
-                        : String(latestAssessment.general_health)
+                        : generalHealthStatuses?.find(
+                            (s) => s.id === latestAssessment.general_health
+                          )?.name || String(latestAssessment.general_health)
                       : cow.status === "Sick"
                       ? "Poor"
                       : "Good"
@@ -886,7 +900,9 @@ export default function CowDetails() {
                     latestAssessment
                       ? typeof latestAssessment.udder_health === "object"
                         ? latestAssessment.udder_health.name
-                        : String(latestAssessment.udder_health)
+                        : udderHealthStatuses?.find(
+                            (s) => s.id === latestAssessment.udder_health
+                          )?.name || String(latestAssessment.udder_health)
                       : "Healthy"
                   }
                 />
@@ -896,7 +912,9 @@ export default function CowDetails() {
                     latestAssessment
                       ? typeof latestAssessment.mastitis === "object"
                         ? latestAssessment.mastitis.name
-                        : String(latestAssessment.mastitis)
+                        : mastitisStatuses?.find(
+                            (s) => s.id === latestAssessment.mastitis
+                          )?.name || String(latestAssessment.mastitis)
                       : "Negative"
                   }
                 />

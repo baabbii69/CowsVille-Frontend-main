@@ -819,6 +819,11 @@ export default function FarmDetails() {
       ? floorTypes?.find((f) => f.id === farm.type_of_floor)?.name
       : (farm.type_of_floor as any)?.name;
 
+  const waterSourceName =
+    typeof farm.source_of_water === "number"
+      ? waterSources?.find((s) => s.id === farm.source_of_water)?.name
+      : (farm.source_of_water as any)?.name;
+
   // Helper for trend icon
   const renderTrend = (val: number, target: number, inverse = false) => {
     const isGood = inverse ? val <= target : val >= target;
@@ -1274,7 +1279,7 @@ export default function FarmDetails() {
                           Main Feed
                         </p>
                         <p className="text-sm font-bold text-slate-900 dark:text-white">
-                          {farm.main_feed}
+                          {farm.main_feed?.trim().split(/\s+/).join(", ")}
                         </p>
                       </div>
                     </div>
@@ -1287,9 +1292,7 @@ export default function FarmDetails() {
                           Water Source
                         </p>
                         <p className="text-sm font-bold text-slate-900 dark:text-white">
-                          {typeof farm.source_of_water === "object"
-                            ? farm.source_of_water.name
-                            : farm.source_of_water}
+                          {waterSourceName || "Unknown"}
                         </p>
                       </div>
                     </div>
