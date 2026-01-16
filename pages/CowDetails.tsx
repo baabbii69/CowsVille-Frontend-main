@@ -40,6 +40,7 @@ import {
 } from "lucide-react";
 import { MedicalAssessment, StaffMember } from "../types";
 import { useToast } from "../context/ToastContext";
+import { formatDate } from "../utils/dateUtils";
 
 // --- Fertility Window Component ---
 const FertilityWindowGraph = ({
@@ -671,6 +672,34 @@ export default function CowDetails() {
     [medicalHistory]
   );
 
+  // Calculate Current Insemination Date and Expected Calving
+  const currentInseminationDate = useMemo(() => {
+    const latestRecord = insemRecords
+      ?.filter((r: any) => r.recorded_date)
+      ?.sort((a: any, b: any) => new Date(b.recorded_date).getTime() - new Date(a.recorded_date).getTime())[0];
+    
+    if (latestRecord?.date_of_insemination) {
+      return latestRecord.date_of_insemination;
+    }
+    
+    if (latestRecord?.recorded_date) {
+      return latestRecord.recorded_date.replace('Z', '');
+    }
+    
+    return null;
+  }, [insemRecords]);
+
+  const expectedCalvingDate = useMemo(() => {
+    // Only if pregnant and we have a starting date
+    if (cow?.status !== 'Pregnant' || !currentInseminationDate) {
+      return null;
+    }
+    
+    const d = new Date(currentInseminationDate);
+    d.setDate(d.getDate() + 280);
+    return d;
+  }, [cow?.status, currentInseminationDate]);
+
   if (isLoading) return <PageLoader variant="inline" />;
   if (!cow) return <div className="p-8 text-center">Cow not found</div>;
 
@@ -752,7 +781,7 @@ export default function CowDetails() {
                     : (cow.farm as any).farm_id}
                 </span>
                 <span>•</span>
-                <span>{breedName}</span>
+                <span className="uppercase">{breedName}</span>
               </div>
             </div>
 
@@ -768,7 +797,7 @@ export default function CowDetails() {
                   Date of Birth
                 </p>
                 <p className="text-xl font-bold">
-                  {cow.date_of_birth ? new Date(cow.date_of_birth).toLocaleDateString() : "N/A"}
+                  {cow.date_of_birth ? formatDate(cow.date_of_birth) : "N/A"}
                 </p>
               </div>
             </div>
@@ -804,7 +833,7 @@ export default function CowDetails() {
                 <div className="flex justify-between text-sm border-b border-slate-100 dark:border-slate-800 pb-3">
                   <span className="text-slate-500">DOB</span>
                   <span className="font-medium">
-                    {cow.date_of_birth || "N/A"}
+                    {cow.date_of_birth ? formatDate(cow.date_of_birth) : "N/A"}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -923,9 +952,7 @@ export default function CowDetails() {
               {latestAssessment && (
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 text-center">
                   Last assessed:{" "}
-                  {new Date(
-                    latestAssessment.assessment_date
-                  ).toLocaleDateString()}
+                  {formatDate(latestAssessment.assessment_date)}
                 </div>
               )}
             </CardContent>
@@ -1011,7 +1038,7 @@ export default function CowDetails() {
                       : "border-transparent text-slate-500 hover:text-slate-700"
                   }`}
                 >
-                  Reproduction Stats
+                  Reproductive Status
                 </button>
               </div>
             </div>
@@ -1057,9 +1084,7 @@ export default function CowDetails() {
                                       : "Routine Checkup")}
                                 </h4>
                                 <p className="text-xs text-slate-500 mt-0.5">
-                                  {new Date(
-                                    record.assessment_date
-                                  ).toLocaleDateString()}
+                                  {formatDate(record.assessment_date)}
                                 </p>
                               </div>
                               <Badge
@@ -1128,32 +1153,17 @@ export default function CowDetails() {
                           </span>
                         </div>
                         <div className="flex justify-between border-b border-blue-200/50 pb-2">
-                          <span className="text-blue-600/70">Last Date</span>
+                          <span className="text-blue-600/70">Last Date of Insemination</span>
                           <span className="font-bold text-blue-900 dark:text-blue-100">
-                            {cow.last_date_insemination || "N/A"}
+                            {cow.last_date_insemination ? formatDate(cow.last_date_insemination) : "N/A"}
                           </span>
                         </div>
                         <div className="flex justify-between border-b border-blue-200/50 pb-2">
                           <span className="text-blue-600/70">
-                            Insemination Date
+                            Current Insemination Date
                           </span>
                           <span className="font-bold text-blue-900 dark:text-blue-100">
-                            {(() => {
-                              const latestRecord = insemRecords
-                                ?.filter((r: any) => r.recorded_date)
-                                ?.sort((a: any, b: any) => new Date(b.recorded_date).getTime() - new Date(a.recorded_date).getTime())[0];
-                              
-                              if (latestRecord?.date_of_insemination) {
-                                return new Date(latestRecord.date_of_insemination).toLocaleDateString();
-                              }
-                              
-                              if (latestRecord?.recorded_date) {
-                                const localDateStr = latestRecord.recorded_date.replace('Z', '');
-                                return new Date(localDateStr).toLocaleDateString();
-                              }
-                              
-                              return "N/A";
-                            })()}
+                            {formatDate(currentInseminationDate)}
                           </span>
                         </div>
                         <div className="flex justify-between">
@@ -1179,11 +1189,11 @@ export default function CowDetails() {
                         <div className="space-y-3 text-sm">
                           <div className="flex justify-between border-b border-amber-200/50 pb-2">
                             <span className="text-amber-600/70">
-                              Pregnancy Date
+                              Pregnancy Confirmation Date
                             </span>
                             <span className="font-bold text-amber-900 dark:text-amber-100">
                               {reproRecords.find((r: any) => r.is_cow_pregnant)?.pregnancy_date 
-                                ? new Date(reproRecords.find((r: any) => r.is_cow_pregnant)!.pregnancy_date).toLocaleDateString()
+                                ? formatDate(reproRecords.find((r: any) => r.is_cow_pregnant)!.pregnancy_date)
                                 : "N/A"}
                             </span>
                           </div>
@@ -1200,9 +1210,7 @@ export default function CowDetails() {
                               Expected Calving
                             </span>
                             <span className="font-bold text-amber-900 dark:text-amber-100">
-                              {reproRecords.find((r: any) => r.is_cow_pregnant)?.calving_date 
-                                ? new Date(reproRecords.find((r: any) => r.is_cow_pregnant)!.calving_date).toLocaleDateString()
-                                : "N/A"}
+                              {formatDate(expectedCalvingDate)}
                             </span>
                           </div>
                         </div>
@@ -1219,19 +1227,11 @@ export default function CowDetails() {
                       <div className="space-y-3 text-sm">
                         <div className="flex justify-between border-b border-purple-200/50 pb-2">
                           <span className="text-purple-600/70">
-                            Last Calving
-                          </span>
-                          <span className="font-bold text-purple-900 dark:text-purple-100">
-                            {cow.last_calving_date || "N/A"}
-                          </span>
-                        </div>
-                        <div className="flex justify-between border-b border-purple-200/50 pb-2">
-                          <span className="text-purple-600/70">
-                            Calving Date
+                            Last Calving Date
                           </span>
                           <span className="font-bold text-purple-900 dark:text-purple-100">
                             {reproRecords?.find((r: any) => r.calving_date)?.calving_date
-                              ? new Date(reproRecords.find((r: any) => r.calving_date)!.calving_date).toLocaleDateString()
+                              ? formatDate(reproRecords.find((r: any) => r.calving_date)!.calving_date)
                               : "N/A"}
                           </span>
                         </div>
@@ -1265,19 +1265,16 @@ export default function CowDetails() {
                   <CardContent>
                     {reproRecords && reproRecords.length > 0 ? (
                       <div className="space-y-4 mt-2">
-                        {reproRecords.map((record: any) => (
+                        {reproRecords
+                          .filter((r: any) => r.heat_sign_start && r.heat_signs_seen)
+                          .map((record: any) => (
                           <div
                             key={record.id}
                             className="flex flex-col sm:flex-row sm:items-start gap-3 pb-3 border-b border-slate-100 dark:border-slate-800 last:border-0 last:pb-0"
                           >
                             <div className="bg-slate-50 dark:bg-slate-800 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 text-center min-w-[100px]">
                               <div className="text-xs font-bold text-slate-500 uppercase tracking-wide">
-                                {new Date(
-                                  record.heat_sign_start
-                                ).toLocaleDateString([], {
-                                  month: "short",
-                                  day: "numeric",
-                                })}
+                                {formatDate(record.heat_sign_start)}
                               </div>
                               <div className="text-xs text-slate-400">
                                 {new Date(
@@ -1293,7 +1290,12 @@ export default function CowDetails() {
                                 Observed Signs:
                               </p>
                               <p className="text-sm text-amber-800 dark:text-amber-200 mt-1">
-                                {record.heat_signs_seen}
+                                {record.heat_signs_seen
+                                  ? record.heat_signs_seen
+                                      .split(/[ ,]+/)
+                                      .map((s: string) => s.replace(/_/g, " "))
+                                      .join(", ")
+                                  : "No signs recorded"}
                               </p>
                             </div>
                           </div>

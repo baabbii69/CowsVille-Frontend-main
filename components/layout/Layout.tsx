@@ -29,7 +29,7 @@ export default function Layout() {
   const navItems = [
     { name: "Dashboard", path: "/", icon: LayoutDashboard },
     { name: "Farms Registry", path: "/farms", icon: Tractor },
-    { name: "Livestock", path: "/cows", icon: Milk },
+    { name: "Herd Registry", path: "/cows", icon: Milk },
     { name: "Cluster Analytics", path: "/clusters", icon: PieChart },
   ];
 

@@ -64,6 +64,7 @@ import {
   Minus,
   Pencil,
 } from "lucide-react";
+import { formatDate } from "../utils/dateUtils";
 import { useForm, Controller } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -1597,9 +1598,7 @@ export default function FarmDetails() {
                             className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
                           >
                             <td className="px-6 py-4 whitespace-nowrap text-slate-600 dark:text-slate-400">
-                              {new Date(
-                                record.assessment_date
-                              ).toLocaleDateString()}
+                              {formatDate(record.assessment_date)}
                             </td>
                             <td className="px-6 py-4 font-medium">
                               {(() => {
