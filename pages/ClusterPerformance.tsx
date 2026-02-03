@@ -180,9 +180,15 @@ export default function ClusterPerformance() {
       farmCount: clusterFarms.length,
       cowCount: clusterCows.length,
       avgYield: (
-        clusterFarms.reduce((acc, f) => acc + (Number(f.total_daily_milk) || 0), 0) /
-        (clusterFarms.length || 1)
-      ).toFixed(0),
+        clusterFarms.reduce((acc, f) => {
+          const farmCows = clusterCows.filter((c) => {
+            const farmId = typeof c.farm === "string" ? c.farm : (c.farm as any).farm_id;
+            return farmId === f.farm_id;
+          });
+          const farmMilk = farmCows.reduce((sum, c) => sum + (Number(c.average_daily_milk) || 0), 0);
+          return acc + farmMilk;
+        }, 0) / (clusterFarms.length || 1)
+      ).toFixed(1),
       avgInsemDays: insemCount
         ? (totalInsemDays / insemCount).toFixed(1)
         : "N/A",
@@ -661,7 +667,10 @@ export default function ClusterPerformance() {
                                 </Badge>
                               </td>
                               <td className="px-4 md:px-6 py-4 font-bold text-blue-600">
-                                {farm.total_daily_milk.toFixed(1)} L
+                                {(cows?.filter((c) => {
+                                  const farmId = typeof c.farm === "string" ? c.farm : (c.farm as any).farm_id;
+                                  return farmId === farm.farm_id;
+                                }).reduce((sum, c) => sum + (Number(c.average_daily_milk) || 0), 0) || 0).toFixed(1)} L
                               </td>
                             </tr>
                           );
