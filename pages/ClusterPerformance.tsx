@@ -180,8 +180,8 @@ export default function ClusterPerformance() {
       farmCount: clusterFarms.length,
       cowCount: clusterCows.length,
       avgYield: (
-        clusterFarms.reduce((acc, f) => acc + f.total_daily_milk, 0) /
-        clusterFarms.length
+        clusterFarms.reduce((acc, f) => acc + (Number(f.total_daily_milk) || 0), 0) /
+        (clusterFarms.length || 1)
       ).toFixed(0),
       avgInsemDays: insemCount
         ? (totalInsemDays / insemCount).toFixed(1)

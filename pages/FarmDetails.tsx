@@ -346,7 +346,7 @@ export default function FarmDetails() {
 
   // Derived Herd Statistics from registered cows
   const registeredStats = useMemo(() => {
-    if (!allCows) return { total: 0, milking: 0, calves: 0, dry: 0 };
+    if (!allCows) return { total: 0, milking: 0, calves: 0, dry: 0, totalDailyMilk: 0 };
     
     const total = allCows.length;
     // Milking cows: those with lactation_number > 0 or "Lactating" status
@@ -363,8 +363,11 @@ export default function FarmDetails() {
     ).length;
 
     const dry = Math.max(0, total - milking - calves);
+
+    // Total Daily Milk: Sum of average_daily_milk from all registered cows
+    const totalDailyMilk = allCows.reduce((acc, cow) => acc + (Number(cow.average_daily_milk) || 0), 0);
     
-    return { total, milking, calves, dry };
+    return { total, milking, calves, dry, totalDailyMilk };
   }, [allCows]);
 
   // Filter and Pagination Logic for Cows Tab
@@ -497,7 +500,7 @@ export default function FarmDetails() {
 
       // 4. Insems per conception (only for pregnant cows)
       if (cow.status === "Pregnant" || (cow.statuses && cow.statuses.includes("Pregnant"))) {
-        const insemCount = cow.number_of_inseminations;
+        const insemCount = Number(cow.number_of_inseminations) || 0;
         totalInsemPerConception += insemCount;
         pregnantCount++;
         
@@ -912,7 +915,7 @@ export default function FarmDetails() {
                   <Droplets className="h-4 w-4" /> Daily Milk
                 </div>
                 <div className="text-3xl font-bold">
-                  {farm.total_daily_milk}{" "}
+                  {registeredStats.totalDailyMilk.toFixed(1)}{" "}
                   <span className="text-lg font-normal text-slate-400">L</span>
                 </div>
               </div>
@@ -1162,7 +1165,7 @@ export default function FarmDetails() {
                 </CardHeader>
                 <CardContent>
                   <div className="mt-2">
-                    <MilkTrendChart currentDaily={farm.total_daily_milk} />
+                    <MilkTrendChart currentDaily={registeredStats.totalDailyMilk} />
                   </div>
                   <div className="grid grid-cols-3 gap-4 mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-center">
                     <div>
@@ -1171,7 +1174,7 @@ export default function FarmDetails() {
                       </p>
                       <p className="text-lg font-bold text-slate-900 dark:text-white">
                         {(
-                          farm.total_daily_milk /
+                          registeredStats.totalDailyMilk /
                           (registeredStats.milking || 1)
                         ).toFixed(1)}{" "}
                         L
