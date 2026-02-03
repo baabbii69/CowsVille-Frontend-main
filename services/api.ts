@@ -742,21 +742,70 @@ export const CowService = {
         MOCK_REPRODUCTION_RECORDS.filter((r) => r.cow === cowId)
       );
     }
-    // Assuming ReproductionViewSet supports filtering by cow_id, or use the custom endpoint if strictly needed
-    // For now, we'll use the standard router endpoint which likely supports filtering
-    const response = await api.get(`/reproduction/`, {
-      params: { cow_id: cowId },
-    });
-    return resolveResponseData(response);
+    // Try both cow_id (string) and cow (numeric) parameters
+    // Also fetch the cow first to get its numeric ID if needed
+    try {
+      // First, get the cow's numeric ID
+      const cowResponse = await api.get(`/cows/`, { params: { search: cowId } });
+      const cowResults = cowResponse.data.results || [];
+      const cow = cowResults.find((c: Cow) => c.cow_id === cowId);
+      const numericCowId = cow?.id;
+
+      // Fetch reproduction records using numeric ID if available
+      const response = await api.get(`/reproduction/`, {
+        params: numericCowId ? { cow: numericCowId } : { cow_id: cowId },
+      });
+      const records = resolveResponseData(response);
+
+      // STRICT CLIENT-SIDE FILTERING: Ensure records belong to this cow
+      if (Array.isArray(records) && numericCowId) {
+        const targetId = String(numericCowId);
+        return records.filter((r: any) => {
+          const recordCowId = typeof r.cow === "object" 
+            ? String(r.cow.id) 
+            : String(r.cow);
+          return recordCowId === targetId;
+        });
+      }
+      
+      return records;
+    } catch (error) {
+      console.warn(`Error fetching reproduction records for cow ${cowId}:`, error);
+      return [];
+    }
   },
   getInseminationRecords: async (cowId: string) => {
     if (isDemo) {
       return Promise.resolve([]);
     }
-    const response = await api.get(`/insemination-records/`, {
-      params: { cow: cowId },
-    });
-    return resolveResponseData(response);
+    try {
+      // First, get the cow's numeric ID
+      const cowResponse = await api.get(`/cows/`, { params: { search: cowId } });
+      const cowResults = cowResponse.data.results || [];
+      const cow = cowResults.find((c: Cow) => c.cow_id === cowId);
+      const numericCowId = cow?.id;
+
+      const response = await api.get(`/insemination-records/`, {
+        params: numericCowId ? { cow: numericCowId } : { cow: cowId },
+      });
+      const records = resolveResponseData(response);
+
+      // STRICT CLIENT-SIDE FILTERING: Ensure records belong to this cow
+      if (Array.isArray(records) && numericCowId) {
+        const targetId = String(numericCowId);
+        return records.filter((r: any) => {
+          const recordCowId = typeof r.cow === "object"
+            ? String(r.cow.id)
+            : String(r.cow);
+          return recordCowId === targetId;
+        });
+      }
+
+      return records;
+    } catch (error) {
+      console.warn(`Error fetching insemination records for cow ${cowId}:`, error);
+      return [];
+    }
   },
 };
 

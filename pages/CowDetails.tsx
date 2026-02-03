@@ -1230,9 +1230,18 @@ export default function CowDetails() {
                             Last Calving Date
                           </span>
                           <span className="font-bold text-purple-900 dark:text-purple-100">
-                            {reproRecords?.find((r: any) => r.calving_date)?.calving_date
-                              ? formatDate(reproRecords.find((r: any) => r.calving_date)!.calving_date)
-                              : "N/A"}
+                            {(() => {
+                              // First try to get from reproduction records
+                              const recordCalvingDate = reproRecords?.find((r: any) => r.calving_date)?.calving_date;
+                              if (recordCalvingDate) {
+                                return formatDate(recordCalvingDate);
+                              }
+                              // Fallback to cow's last_calving_date field
+                              if (cow.last_calving_date) {
+                                return formatDate(cow.last_calving_date);
+                              }
+                              return "N/A";
+                            })()}
                           </span>
                         </div>
                         <div className="flex justify-between border-b border-purple-200/50 pb-2">

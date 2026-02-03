@@ -86,6 +86,7 @@ export default function Farms() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterHygiene, setFilterHygiene] = useState<string>("all");
   const [filterHousing, setFilterHousing] = useState<string>("all");
+  const [filterCluster, setFilterCluster] = useState<string>("all");
 
   const queryClient = useQueryClient();
 
@@ -234,6 +235,15 @@ export default function Farms() {
   };
 
   const prevStep = () => setCurrentStep((prev) => Math.max(prev - 1, 0));
+  
+  // Extract Unique Clusters (based on fertility_camp_no)
+  const uniqueClusters = React.useMemo(() => {
+    if (!farms) return [];
+    const clusters = farms
+      .map((f) => f.fertility_camp_no)
+      .filter((c): c is number => c !== null && c !== undefined);
+    return Array.from(new Set(clusters)).sort((a, b) => a - b);
+  }, [farms]);
 
   // Advanced Filtering Logic
   const filteredFarms = farms?.filter((f) => {
@@ -251,9 +261,13 @@ export default function Farms() {
         ? (f.type_of_housing as any).id
         : f.type_of_housing;
     const matchesHousing =
-      filterHousing === "all" || housingId.toString() === filterHousing;
+      filterHousing === "all" || housingId?.toString() === filterHousing;
 
-    return matchesSearch && matchesHygiene && matchesHousing;
+    const matchesCluster =
+      filterCluster === "all" ||
+      f.fertility_camp_no?.toString() === filterCluster;
+
+    return matchesSearch && matchesHygiene && matchesHousing && matchesCluster;
   });
 
   return (
@@ -316,12 +330,27 @@ export default function Farms() {
               ))}
             </Select>
           </div>
+          <div className="min-w-[160px]">
+            <Select
+              value={filterCluster}
+              onChange={(e) => setFilterCluster(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-950 border-slate-200 dark:border-slate-800 h-11"
+            >
+              <option value="all">All Clusters</option>
+              {uniqueClusters.map((cluster) => (
+                <option key={cluster} value={cluster}>
+                  Cluster {cluster}
+                </option>
+              ))}
+            </Select>
+          </div>
           <Button
             variant="ghost"
             onClick={() => {
               setSearch("");
               setFilterHygiene("all");
               setFilterHousing("all");
+              setFilterCluster("all");
             }}
             className="text-slate-500 hover:text-slate-700"
           >
@@ -357,6 +386,7 @@ export default function Farms() {
                 setSearch("");
                 setFilterHygiene("all");
                 setFilterHousing("all");
+                setFilterCluster("all");
               }}
             >
               Clear All Filters
