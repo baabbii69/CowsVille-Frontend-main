@@ -344,6 +344,29 @@ export default function FarmDetails() {
       }),
   });
 
+  // Derived Herd Statistics from registered cows
+  const registeredStats = useMemo(() => {
+    if (!allCows) return { total: 0, milking: 0, calves: 0, dry: 0 };
+    
+    const total = allCows.length;
+    // Milking cows: those with lactation_number > 0 or "Lactating" status
+    const milking = allCows.filter(c => 
+      (c.lactation_number && c.lactation_number > 0) || 
+      c.status === "Lactating" || 
+      (c.statuses && c.statuses.includes("Lactating"))
+    ).length;
+    
+    // Calves: those with parity 0 and lactation 0
+    const calves = allCows.filter(c => 
+      (c.parity === 0 || !c.parity) && 
+      (c.lactation_number === 0 || !c.lactation_number)
+    ).length;
+
+    const dry = Math.max(0, total - milking - calves);
+    
+    return { total, milking, calves, dry };
+  }, [allCows]);
+
   // Filter and Pagination Logic for Cows Tab
   const filteredCowsList = useMemo(() => {
     if (!allCows) return [];
@@ -881,7 +904,7 @@ export default function FarmDetails() {
                   <Home className="h-4 w-4" /> Total Herd
                 </div>
                 <div className="text-3xl font-bold">
-                  {farm.total_number_of_cows}
+                  {registeredStats.total}
                 </div>
               </div>
               <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-4 min-w-[140px]">
@@ -1149,7 +1172,7 @@ export default function FarmDetails() {
                       <p className="text-lg font-bold text-slate-900 dark:text-white">
                         {(
                           farm.total_daily_milk /
-                          (farm.number_of_milking_cows || 1)
+                          (registeredStats.milking || 1)
                         ).toFixed(1)}{" "}
                         L
                       </p>
@@ -1160,8 +1183,8 @@ export default function FarmDetails() {
                       </p>
                       <p className="text-lg font-bold text-emerald-600">
                         {Math.round(
-                          (farm.number_of_milking_cows /
-                            farm.total_number_of_cows) *
+                          (registeredStats.milking /
+                            (registeredStats.total || 1)) *
                             100
                         )}
                         %
@@ -1196,15 +1219,15 @@ export default function FarmDetails() {
                           <div className="w-2 h-2 rounded-full bg-emerald-500"></div>{" "}
                           Milking
                         </span>
-                        <span>{farm.number_of_milking_cows}</span>
+                        <span>{registeredStats.milking}</span>
                       </div>
                       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-emerald-500"
                           style={{
                             width: `${
-                              (farm.number_of_milking_cows /
-                                farm.total_number_of_cows) *
+                              (registeredStats.milking /
+                                (registeredStats.total || 1)) *
                               100
                             }%`,
                           }}
@@ -1218,21 +1241,15 @@ export default function FarmDetails() {
                           <div className="w-2 h-2 rounded-full bg-blue-500"></div>{" "}
                           Dry
                         </span>
-                        <span>
-                          {farm.total_number_of_cows -
-                            farm.number_of_milking_cows -
-                            farm.number_of_calves}
-                        </span>
+                        <span>{registeredStats.dry}</span>
                       </div>
                       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-blue-500"
                           style={{
                             width: `${
-                              ((farm.total_number_of_cows -
-                                farm.number_of_milking_cows -
-                                farm.number_of_calves) /
-                                farm.total_number_of_cows) *
+                              (registeredStats.dry /
+                                (registeredStats.total || 1)) *
                               100
                             }%`,
                           }}
@@ -1246,15 +1263,15 @@ export default function FarmDetails() {
                           <div className="w-2 h-2 rounded-full bg-amber-500"></div>{" "}
                           Calves
                         </span>
-                        <span>{farm.number_of_calves}</span>
+                        <span>{registeredStats.calves}</span>
                       </div>
                       <div className="h-2 w-full bg-slate-100 rounded-full overflow-hidden">
                         <div
                           className="h-full bg-amber-500"
                           style={{
                             width: `${
-                              (farm.number_of_calves /
-                                farm.total_number_of_cows) *
+                              (registeredStats.calves /
+                                (registeredStats.total || 1)) *
                               100
                             }%`,
                           }}
