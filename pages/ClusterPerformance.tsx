@@ -45,16 +45,23 @@ export default function ClusterPerformance() {
 
   // Extract Unique Clusters
   const clusters = useMemo(() => {
-    if (!farms) return [];
+    if (!farms || !cows) return [];
     const unique = new Set(farms.map((f) => f.fertility_camp_no).filter(Boolean));
-    return Array.from(unique).map((c) => ({
-      id: String(c),
-      farmCount: farms.filter((f) => f.fertility_camp_no === c).length,
-      cowCount: farms
-        .filter((f) => f.fertility_camp_no === c)
-        .reduce((acc, f) => acc + f.total_number_of_cows, 0),
-    }));
-  }, [farms]);
+    return Array.from(unique).map((c) => {
+      const clusterFarms = farms.filter((f) => f.fertility_camp_no === c);
+      const clusterFarmIds = new Set(clusterFarms.map((f) => f.farm_id));
+      const clusterCows = cows.filter((cow) => {
+        const farmId = typeof cow.farm === "string" ? cow.farm : (cow.farm as any).farm_id;
+        return clusterFarmIds.has(farmId);
+      });
+
+      return {
+        id: String(c),
+        farmCount: clusterFarms.length,
+        cowCount: clusterCows.length,
+      };
+    });
+  }, [farms, cows]);
 
   // Filter Logic
   const filteredClusters = useMemo(() => {
@@ -627,31 +634,38 @@ export default function ClusterPerformance() {
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                       {farms
                         .filter((f) => f.fertility_camp_no === Number(activeClusterId))
-                        .map((farm) => (
-                          <tr 
-                            key={farm.farm_id} 
-                            onClick={() => navigate(`/farms/${farm.farm_id}`)}
-                            className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
-                          >
-                            <td className="px-4 md:px-6 py-4 font-mono text-xs font-bold text-primary-600">
-                              {farm.farm_id}
-                            </td>
-                            <td className="px-4 md:px-6 py-4 font-medium text-slate-900 dark:text-white">
-                              {farm.owner_name}
-                            </td>
-                            <td className="px-4 md:px-6 py-4 text-slate-700 dark:text-slate-300">
-                              {farm.address || 'N/A'}
-                            </td>
-                            <td className="px-4 md:px-6 py-4">
-                              <Badge variant="info">
-                                {farm.total_number_of_cows} cows
-                              </Badge>
-                            </td>
-                            <td className="px-4 md:px-6 py-4 font-bold text-blue-600">
-                              {farm.total_daily_milk.toFixed(1)} L
-                            </td>
-                          </tr>
-                        ))}
+                        .map((farm) => {
+                          const farmCowsCount = cows?.filter((c) => {
+                            const farmId = typeof c.farm === "string" ? c.farm : (c.farm as any).farm_id;
+                            return farmId === farm.farm_id;
+                          }).length || 0;
+
+                          return (
+                            <tr 
+                              key={farm.farm_id} 
+                              onClick={() => navigate(`/farms/${farm.farm_id}`)}
+                              className="hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors"
+                            >
+                              <td className="px-4 md:px-6 py-4 font-mono text-xs font-bold text-primary-600">
+                                {farm.farm_id}
+                              </td>
+                              <td className="px-4 md:px-6 py-4 font-medium text-slate-900 dark:text-white">
+                                {farm.owner_name}
+                              </td>
+                              <td className="px-4 md:px-6 py-4 text-slate-700 dark:text-slate-300">
+                                {farm.address || 'N/A'}
+                              </td>
+                              <td className="px-4 md:px-6 py-4">
+                                <Badge variant="info">
+                                  {farmCowsCount} cows
+                                </Badge>
+                              </td>
+                              <td className="px-4 md:px-6 py-4 font-bold text-blue-600">
+                                {farm.total_daily_milk.toFixed(1)} L
+                              </td>
+                            </tr>
+                          );
+                        })}
                     </tbody>
                   </table>
                 </div>
