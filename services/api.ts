@@ -9,7 +9,7 @@ import {
 } from "../types";
 
 // export const API_BASE_URL = "https://apiv3.cowsville-aau-cvma.com/api";
-export const API_BASE_URL = "http://78.47.170.156/api/";
+export const API_BASE_URL = "https://cowsville.com/api/";
 
 // --- DEMO MODE / MOCK DATA SETUP ---
 let isDemo = localStorage.getItem("demo_mode") === "true";

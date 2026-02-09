@@ -90,9 +90,8 @@ export default function Dashboard() {
 
   // Calculate Stats based on active dataset
   const totalFarms = activeFarms.length;
-  // Ensure totalCows matches the actual number of cows in the database (Livestock list)
-  // Previously summed farm.total_number_of_cows, which caused discrepancies with backend data
-  const totalCows = cows ? cows.length : 0;
+  // Use activeCows to ensure counts are accurate and reactive to search
+  const totalCows = activeCows.length;
 
   const sickCows = activeCows.filter((c) => 
     c.statuses?.includes("Sick") || c.status === "Sick"
@@ -100,7 +99,9 @@ export default function Dashboard() {
   const pregnantCows = activeCows.filter((c) => 
     c.statuses?.includes("Pregnant") || c.status === "Pregnant"
   ).length;
-  const totalMilk = activeFarms.reduce((acc, f) => acc + f.total_daily_milk, 0);
+
+  // Calculate total milk through individual cows for accuracy
+  const totalMilk = activeCows.reduce((acc, c) => acc + (Number(c.average_daily_milk) || 0), 0);
 
   // For the list view
   const displayedFarmsList = debouncedSearchTerm
