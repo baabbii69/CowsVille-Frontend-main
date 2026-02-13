@@ -73,6 +73,7 @@ export default function Cows() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [breedFilter, setBreedFilter] = useState("all");
+  const [clusterFilter, setClusterFilter] = useState("all");
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -97,10 +98,19 @@ export default function Cows() {
     queryFn: DataService.getGynecologicalStatuses,
   });
 
+  // Extract Unique Clusters from farms
+  const uniqueClusters = React.useMemo(() => {
+    if (!farms) return [];
+    const clusters = farms
+      .map((f) => f.fertility_camp_no)
+      .filter((c): c is number => c !== null && c !== undefined);
+    return Array.from(new Set(clusters)).sort((a, b) => a - b);
+  }, [farms]);
+
   // Reset to first page when search or filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, statusFilter, breedFilter]);
+  }, [searchTerm, statusFilter, breedFilter, clusterFilter]);
 
   const createMutation = useMutation({
     mutationFn: CowService.create,
@@ -163,7 +173,12 @@ export default function Cows() {
       const matchesBreed =
         breedFilter === "all" || cow.breed.toString() === breedFilter;
 
-      return matchesSearch && matchesStatus && matchesBreed;
+      // Cluster Filter Logic: Find cow's farm and check its fertility_camp_no
+      const cowFarmId = typeof cow.farm === "string" ? cow.farm : (cow.farm as any).farm_id;
+      const farmObj = farms?.find(f => f.farm_id === cowFarmId);
+      const matchesCluster = clusterFilter === "all" || farmObj?.fertility_camp_no?.toString() === clusterFilter;
+
+      return matchesSearch && matchesStatus && matchesBreed && matchesCluster;
     }) || [];
 
   // Pagination Logic
@@ -232,12 +247,27 @@ export default function Cows() {
               ))}
             </Select>
           </div>
+          <div className="min-w-[150px]">
+            <Select
+              value={clusterFilter}
+              onChange={(e) => setClusterFilter(e.target.value)}
+              className="bg-slate-50 dark:bg-slate-950 h-10 text-sm"
+            >
+              <option value="all">All Clusters</option>
+              {uniqueClusters.map((cluster) => (
+                <option key={cluster} value={cluster.toString()}>
+                  Cluster {cluster}
+                </option>
+              ))}
+            </Select>
+          </div>
           <Button
             variant="ghost"
             onClick={() => {
               setSearchTerm("");
               setStatusFilter("all");
               setBreedFilter("all");
+              setClusterFilter("all");
             }}
             className="text-slate-500 hover:text-slate-700"
           >
@@ -330,6 +360,7 @@ export default function Cows() {
                           setSearchTerm("");
                           setStatusFilter("all");
                           setBreedFilter("all");
+                          setClusterFilter("all");
                         }}
                       >
                         Clear Filters

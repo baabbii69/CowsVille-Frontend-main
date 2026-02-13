@@ -52,14 +52,11 @@ const FertilityWindowGraph = ({
   const start = useMemo(() => {
     if (heatStartTime) {
       // Parse the UTC time but treat it as Ethiopian local time
-      // The API sends "2026-01-06T12:00:00Z" which is UTC, but the time was entered in Ethiopian time
-      // So we need to parse it without timezone conversion
       const dateStr = typeof heatStartTime === 'string' ? heatStartTime : heatStartTime.toISOString();
-      // Remove the 'Z' to prevent UTC conversion and parse as local time
       const localDateStr = dateStr.replace('Z', '');
       return new Date(localDateStr);
     }
-    return new Date(Date.now() - 1000 * 60 * 60 * 14);
+    return null;
   }, [heatStartTime]);
 
   const [now, setNow] = useState(new Date());
@@ -68,6 +65,8 @@ const FertilityWindowGraph = ({
     const timer = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  if (!start) return null;
 
   const elapsedHours = (now.getTime() - start.getTime()) / (1000 * 60 * 60);
   const maxHours = 32; // Showing slightly more than 28 to give breathing room
@@ -1123,14 +1122,11 @@ export default function CowDetails() {
             <TabsContent active={activeTab === "repro"}>
               <div className="space-y-6">
                 {/* Fertility Window Graph - Enhanced Light Theme with Date */}
-                {cow.status !== "Pregnant" && (
+                {cow.status !== "Pregnant" && reproRecords?.[0]?.heat_sign_start && (
                   <Card className="border-l-4 border-l-violet-500 shadow-md bg-white dark:bg-slate-900 overflow-hidden">
                     <CardContent className="p-6">
                       <FertilityWindowGraph 
-                        heatStartTime={reproRecords && reproRecords.length > 0 
-                          ? reproRecords[0]?.heat_sign_start 
-                          : undefined
-                        }
+                        heatStartTime={reproRecords[0].heat_sign_start}
                       />
                     </CardContent>
                   </Card>

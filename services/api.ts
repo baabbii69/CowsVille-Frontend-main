@@ -752,13 +752,18 @@ export const CowService = {
       const numericCowId = cow?.id;
 
       // Fetch reproduction records using numeric ID if available
+      if (!numericCowId) {
+        console.warn(`No numeric ID found for cow ${cowId}, cannot fetch precise repro records.`);
+        return [];
+      }
+
       const response = await api.get(`/reproduction/`, {
-        params: numericCowId ? { cow: numericCowId } : { cow_id: cowId },
+        params: { cow: numericCowId },
       });
       const records = resolveResponseData(response);
 
       // STRICT CLIENT-SIDE FILTERING: Ensure records belong to this cow
-      if (Array.isArray(records) && numericCowId) {
+      if (Array.isArray(records)) {
         const targetId = String(numericCowId);
         return records.filter((r: any) => {
           const recordCowId = typeof r.cow === "object" 
@@ -768,7 +773,7 @@ export const CowService = {
         });
       }
       
-      return records;
+      return [];
     } catch (error) {
       console.warn(`Error fetching reproduction records for cow ${cowId}:`, error);
       return [];
