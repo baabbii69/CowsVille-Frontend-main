@@ -638,6 +638,17 @@ export const CowService = {
     }
   },
 
+  createReproductionRecord: async (data: any) => {
+    try {
+      console.log("[CowService] Creating reproduction record:", data);
+      const response = await api.post("/reproduction/", data);
+      return response.data;
+    } catch (error) {
+      console.error("[CowService] Failed to create reproduction record:", error);
+      throw error;
+    }
+  },
+
   getOne: async (id: string): Promise<Cow> => {
     if (isDemo) {
       const cow = MOCK_COWS.find(
@@ -721,6 +732,22 @@ export const CowService = {
     }
     const response = await api.post("/cows/", data);
     return normalizeCow(response.data);
+  },
+  update: async (numericId: number, data: Record<string, any>): Promise<Cow> => {
+    if (isDemo) {
+      const idx = MOCK_COWS.findIndex((c) => c.id === numericId || c.cow_id === String(numericId));
+      if (idx !== -1) Object.assign(MOCK_COWS[idx], data);
+      return Promise.resolve(MOCK_COWS[idx] || ({} as Cow));
+    }
+    console.log("[CowService.update] Sending PATCH to /cows/" + numericId + "/", data);
+    try {
+      const response = await api.patch(`/cows/${numericId}/`, data);
+      console.log("[CowService.update] Success:", response.data);
+      return normalizeCow(response.data);
+    } catch (error: any) {
+      console.error("[CowService.update] Error:", error?.response?.status, error?.response?.data);
+      throw error;
+    }
   },
   getMedicalAssessmentsByCow: async (
     cowId: string

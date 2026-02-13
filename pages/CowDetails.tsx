@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { CowService, DataService } from "../services/api";
 import {
   Button,
@@ -15,6 +15,7 @@ import {
   TabsTrigger,
   TabsContent,
   Modal,
+  Select,
 } from "../components/ui";
 import { ViewAssessmentModal } from "../components/ViewAssessmentModal";
 import {
@@ -37,8 +38,12 @@ import {
   TrendingUp,
   Timer,
   Flame,
+  Edit3,
+  Save,
+  X,
+  Loader2,
 } from "lucide-react";
-import { MedicalAssessment, StaffMember } from "../types";
+import { MedicalAssessment, StaffMember, Cow } from "../types";
 import { useToast } from "../context/ToastContext";
 import { formatDate } from "../utils/dateUtils";
 
@@ -603,10 +608,14 @@ const HealthStatusIndicator = ({
 export default function CowDetails() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("timeline");
   const [selectedRecord, setSelectedRecord] =
     useState<MedicalAssessment | null>(null);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editForm, setEditForm] = useState<Record<string, any>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   const { data: cow, isLoading } = useQuery({
     queryKey: ["cow", id],
@@ -720,6 +729,162 @@ export default function CowDetails() {
     });
   };
 
+  // --- Edit Cow Logic ---
+  const handleOpenEdit = () => {
+    if (!cow) return;
+    console.log("[CowEdit] Opening edit modal. Raw cow data:", cow);
+
+    // Resolve breed to its ID for the select dropdown
+    const breedId = typeof cow.breed === "object" ? (cow.breed as any).id : cow.breed;
+    // Resolve gynecological_status to its ID
+    const gyneId = typeof cow.gynecological_status === "object" ? (cow.gynecological_status as any).id : cow.gynecological_status;
+
+    setEditForm({
+      date_of_birth: cow.date_of_birth || "",
+      sex: cow.sex || "F",
+      breed: breedId || "",
+      parity: cow.parity ?? 0,
+      body_weight: cow.body_weight ?? 0,
+      bcs: cow.bcs ?? 3.0,
+      gynecological_status: gyneId || "",
+      lactation_number: cow.lactation_number ?? 0,
+      days_in_milk: cow.days_in_milk ?? 0,
+      average_daily_milk: cow.average_daily_milk ?? 0,
+      cow_inseminated_before: cow.cow_inseminated_before ?? false,
+      is_pregnant: cow.status === "Pregnant" || false,
+      last_date_insemination: cow.last_date_insemination || "",
+      number_of_inseminations: cow.number_of_inseminations ?? 0,
+      id_or_breed_bull_used: cow.id_or_breed_bull_used || "",
+      last_calving_date: cow.last_calving_date || "",
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleEditFormChange = (field: string, value: any) => {
+    setEditForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleSaveEdit = async () => {
+    if (!cow || !cow.id) {
+      console.error("[CowEdit] Cannot save: cow or cow.id is missing", cow);
+      toast({ type: "error", title: "Save Failed", message: "Cow ID is missing. Cannot update." });
+      return;
+    }
+
+    setIsSaving(true);
+    console.log("[CowEdit] Raw editForm before coercion:", editForm);
+
+    try {
+      // Build the payload with proper types for the backend CowCreateUpdateSerializer
+      const payload: Record<string, any> = {};
+
+      // --- Breed: Backend expects name string, not ID ---
+      if (editForm.breed) {
+        const breedObj = breeds?.find((b) => b.id === Number(editForm.breed));
+        if (breedObj) {
+          payload.breed = breedObj.name;
+          console.log("[CowEdit] Breed resolved:", editForm.breed, "->", breedObj.name);
+        } else {
+          payload.breed = String(editForm.breed);
+          console.warn("[CowEdit] Could not resolve breed ID, sending raw:", editForm.breed);
+        }
+      }
+
+      // --- Gynecological Status: Backend accepts PrimaryKeyRelatedField (number) ---
+      if (editForm.gynecological_status) {
+        payload.gynecological_status = Number(editForm.gynecological_status);
+        console.log("[CowEdit] Gyne status:", payload.gynecological_status);
+      }
+
+      // --- BCS: Backend expects string, validates to Decimal ---
+      payload.bcs = String(editForm.bcs);
+
+      // --- Boolean fields: Backend expects "yes"/"no" strings ---
+      payload.cow_inseminated_before = editForm.cow_inseminated_before ? "yes" : "no";
+
+      // --- Pregnancy: Backend serializer has is_pregnant write_only field ---
+      payload.is_pregnant = editForm.is_pregnant ? "yes" : "no";
+
+      // --- Sex ---
+      payload.sex = editForm.sex || "F";
+
+      // --- Numeric fields: coerce to numbers ---
+      payload.parity = Number(editForm.parity) || 0;
+      payload.body_weight = Number(editForm.body_weight) || 0;
+      payload.lactation_number = Number(editForm.lactation_number) || 0;
+      payload.days_in_milk = Number(editForm.days_in_milk) || 0;
+      payload.average_daily_milk = Number(editForm.average_daily_milk) || 0;
+      payload.number_of_inseminations = Number(editForm.number_of_inseminations) || 0;
+
+      // --- Date fields: send as string or null ---
+      payload.date_of_birth = editForm.date_of_birth || null;
+      payload.last_date_insemination = editForm.last_date_insemination || null;
+      payload.last_calving_date = editForm.last_calving_date || null;
+
+      // --- String fields ---
+      payload.id_or_breed_bull_used = editForm.id_or_breed_bull_used || "";
+
+      // --- Required for serializer: farm_id_input and cow_id_input ---
+      const farmId = typeof cow.farm === "object" ? (cow.farm as any).farm_id : cow.farm;
+      payload.farm_id_input = farmId;
+      payload.cow_id_input = cow.cow_id;
+
+      console.log("[CowEdit] Final payload:", JSON.stringify(payload, null, 2));
+
+      await CowService.update(cow.id, payload);
+
+      // --- Frontend Fix for Pregnancy Status ---
+      // Backend PATCH update currently does not update pregnancy status (it's a side-effect in create only).
+      // We manually create a reproduction record if the status has changed.
+      const isOriginallyPregnant = cow.status === "Pregnant" || (reproRecords && reproRecords.some((r: any) => r.is_cow_pregnant));
+      const newIsPregnant = editForm.is_pregnant;
+
+      if (newIsPregnant !== undefined && newIsPregnant !== isOriginallyPregnant) {
+        try {
+          console.log(`[CowEdit] Pregnancy status changed to ${newIsPregnant}. Creating reproduction record...`);
+          // Note: Reproduction model requires FK IDs (integers), not string IDs.
+          // cow.farm should be the Farm PK (integer) from the read serializer.
+          // cow.id is the Cow PK (integer).
+          await CowService.createReproductionRecord({
+            farm: typeof cow.farm === "object" ? (cow.farm as any).id : cow.farm,
+            cow: cow.id,
+            is_cow_pregnant: newIsPregnant,
+            // If becoming pregnant, optionally set date. For now, leave blank or implementation choice.
+            // If setting to 'no', is_cow_pregnant: false is sufficient.
+            pregnancy_date: newIsPregnant ? new Date().toISOString().split('T')[0] : null
+          });
+          console.log("[CowEdit] Reproduction record created successfully.");
+        } catch (reproError) {
+          console.error("[CowEdit] Failed to create reproduction record:", reproError);
+          // Don't block the UI flow, just log it. The main update succeeded.
+          toast({ type: "error", title: "Warning", message: "Cow updated, but pregnancy record creation failed." });
+        }
+      }
+
+      // Invalidate queries to refresh data
+      queryClient.invalidateQueries({ queryKey: ["cow", id] });
+      queryClient.invalidateQueries({ queryKey: ["cows"] });
+
+      setIsEditModalOpen(false);
+      toast({ type: "success", title: "Cow Updated", message: `${cow.cow_id} has been successfully updated.` });
+    } catch (error: any) {
+      console.error("[CowEdit] Save failed:", error);
+      const detail = error?.response?.data;
+      let msg = "Could not update cow details. Check console for details.";
+      if (detail) {
+        if (typeof detail === "string") msg = detail;
+        else if (typeof detail === "object") {
+          // Flatten DRF error format: {field: ["error1"]} or {field: "error"}
+          const parts = Object.entries(detail).map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(", ") : v}`);
+          msg = parts.join(" | ");
+        }
+      }
+      toast({ type: "error", title: "Update Failed", message: msg });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6 pb-10">
       {/* Vibrant Hero Section - Compact */}
@@ -784,21 +949,31 @@ export default function CowDetails() {
               </div>
             </div>
 
-            <div className="flex gap-3">
-              <div className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-center">
-                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                  Parity
-                </p>
-                <p className="text-xl font-bold">{cow.parity}</p>
+            <div className="flex items-center gap-3">
+              <div className="flex gap-3">
+                <div className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-center">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    Parity
+                  </p>
+                  <p className="text-xl font-bold">{cow.parity}</p>
+                </div>
+                <div className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-center">
+                  <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                    Date of Birth
+                  </p>
+                  <p className="text-xl font-bold">
+                    {cow.date_of_birth ? formatDate(cow.date_of_birth) : "N/A"}
+                  </p>
+                </div>
               </div>
-              <div className="px-4 py-2 bg-white/5 rounded-xl border border-white/10 text-center">
-                <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
-                  Date of Birth
-                </p>
-                <p className="text-xl font-bold">
-                  {cow.date_of_birth ? formatDate(cow.date_of_birth) : "N/A"}
-                </p>
-              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleOpenEdit}
+                className="text-white hover:bg-white/10 border border-white/20 rounded-xl px-4 py-2"
+              >
+                <Edit3 className="h-4 w-4 mr-2" /> Edit
+              </Button>
             </div>
           </div>
         </div>
@@ -1174,45 +1349,45 @@ export default function CowDetails() {
                     </CardContent>
                   </Card>
 
-                  {/* Pregnancy Information Card */}
-                  {reproRecords && reproRecords.some((r: any) => r.is_cow_pregnant) && (
-                    <Card className="bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900">
-                      <CardContent className="p-6">
-                        <div className="flex items-center gap-3 mb-4 text-amber-700 dark:text-amber-300">
-                          <Calendar className="h-5 w-5" />
-                          <h3 className="font-bold">Pregnancy Info</h3>
+                  {/* Pregnancy Information Card - Always visible */}
+                  <Card className="bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900">
+                    <CardContent className="p-6">
+                      <div className="flex items-center gap-3 mb-4 text-amber-700 dark:text-amber-300">
+                        <Calendar className="h-5 w-5" />
+                        <h3 className="font-bold">Pregnancy Info</h3>
+                      </div>
+                      <div className="space-y-3 text-sm">
+                        <div className="flex justify-between border-b border-amber-200/50 pb-2">
+                          <span className="text-amber-600/70">
+                            Pregnant
+                          </span>
+                          <span className={`font-bold px-2 py-0.5 rounded-full text-xs ${
+                            (cow.status === "Pregnant" || (reproRecords && reproRecords.some((r: any) => r.is_cow_pregnant)))
+                              ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                              : "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400"
+                          }`}>
+                            {(cow.status === "Pregnant" || (reproRecords && reproRecords.some((r: any) => r.is_cow_pregnant))) ? "Yes" : "No"}
+                          </span>
                         </div>
-                        <div className="space-y-3 text-sm">
-                          <div className="flex justify-between border-b border-amber-200/50 pb-2">
-                            <span className="text-amber-600/70">
-                              Pregnancy Confirmation Date
-                            </span>
-                            <span className="font-bold text-amber-900 dark:text-amber-100">
-                              {reproRecords.find((r: any) => r.is_cow_pregnant)?.pregnancy_date 
-                                ? formatDate(reproRecords.find((r: any) => r.is_cow_pregnant)!.pregnancy_date)
-                                : "N/A"}
-                            </span>
-                          </div>
-                          <div className="flex justify-between border-b border-amber-200/50 pb-2">
-                            <span className="text-amber-600/70">
-                              Service/Conception
-                            </span>
-                            <span className="font-bold text-amber-900 dark:text-amber-100">
-                              {cow.number_of_inseminations || "N/A"}
-                            </span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-amber-600/70">
-                              Expected Calving
-                            </span>
-                            <span className="font-bold text-amber-900 dark:text-amber-100">
-                              {formatDate(expectedCalvingDate)}
-                            </span>
-                          </div>
+                        <div className="flex justify-between border-b border-amber-200/50 pb-2">
+                          <span className="text-amber-600/70">
+                            Service/Conception
+                          </span>
+                          <span className="font-bold text-amber-900 dark:text-amber-100">
+                            {cow.number_of_inseminations || "N/A"}
+                          </span>
                         </div>
-                      </CardContent>
-                    </Card>
-                  )}
+                        <div className="flex justify-between">
+                          <span className="text-amber-600/70">
+                            Expected Calving
+                          </span>
+                          <span className="font-bold text-amber-900 dark:text-amber-100">
+                            {formatDate(expectedCalvingDate)}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
 
                   <Card className="bg-purple-50 dark:bg-purple-900/10 border-purple-100 dark:border-purple-900">
                     <CardContent className="p-6">
@@ -1323,6 +1498,252 @@ export default function CowDetails() {
         assessment={selectedRecord}
         onClose={() => setSelectedRecord(null)}
       />
+
+      {/* --- Edit Cow Modal --- */}
+      <Modal
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        title={`Edit ${cow.cow_id}`}
+        className="max-w-2xl"
+      >
+        <div className="space-y-6 max-h-[70vh] overflow-y-auto pr-2">
+          {/* Section: Demographics */}
+          <div>
+            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <FileText className="h-4 w-4" /> Demographics
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Cow ID</label>
+                <input
+                  type="text"
+                  value={cow.cow_id}
+                  disabled
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Sex</label>
+                <select
+                  value={editForm.sex || "F"}
+                  onChange={(e) => handleEditFormChange("sex", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                >
+                  <option value="F">Female</option>
+                  <option value="M">Male</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Date of Birth</label>
+                <input
+                  type="date"
+                  value={editForm.date_of_birth || ""}
+                  onChange={(e) => handleEditFormChange("date_of_birth", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Breed</label>
+                <select
+                  value={editForm.breed || ""}
+                  onChange={(e) => handleEditFormChange("breed", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                >
+                  <option value="">Select Breed</option>
+                  {breeds?.map((b) => (
+                    <option key={b.id} value={b.id}>{b.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Health Metrics */}
+          <div>
+            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Activity className="h-4 w-4" /> Health Metrics
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Parity</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editForm.parity ?? 0}
+                  onChange={(e) => handleEditFormChange("parity", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Body Weight (kg)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={editForm.body_weight ?? 0}
+                  onChange={(e) => handleEditFormChange("body_weight", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">BCS (1.0 - 5.0)</label>
+                <select
+                  value={editForm.bcs ?? 3.0}
+                  onChange={(e) => handleEditFormChange("bcs", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                >
+                  {[1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0, 4.5, 5.0].map((v) => (
+                    <option key={v} value={v}>{v.toFixed(1)}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Gyn. Status</label>
+                <select
+                  value={editForm.gynecological_status || ""}
+                  onChange={(e) => handleEditFormChange("gynecological_status", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                >
+                  <option value="">Select Status</option>
+                  {gyneStatuses?.map((g) => (
+                    <option key={g.id} value={g.id}>{g.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Milk Production */}
+          <div>
+            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Milk className="h-4 w-4" /> Milk Production
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Lactation #</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editForm.lactation_number ?? 0}
+                  onChange={(e) => handleEditFormChange("lactation_number", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Days in Milk</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editForm.days_in_milk ?? 0}
+                  onChange={(e) => handleEditFormChange("days_in_milk", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Avg Daily Milk (L)</label>
+                <input
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  value={editForm.average_daily_milk ?? 0}
+                  onChange={(e) => handleEditFormChange("average_daily_milk", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Section: Reproduction */}
+          <div>
+            <h4 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+              <Heart className="h-4 w-4" /> Reproduction
+            </h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Inseminated Before?</label>
+                <select
+                  value={editForm.cow_inseminated_before ? "yes" : "no"}
+                  onChange={(e) => handleEditFormChange("cow_inseminated_before", e.target.value === "yes")}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                >
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Pregnant?</label>
+                <select
+                  value={editForm.is_pregnant ? "yes" : "no"}
+                  onChange={(e) => handleEditFormChange("is_pregnant", e.target.value === "yes")}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                >
+                  <option value="yes">Yes</option>
+                  <option value="no">No</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1"># Inseminations</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={editForm.number_of_inseminations ?? 0}
+                  onChange={(e) => handleEditFormChange("number_of_inseminations", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Last Insemination Date</label>
+                <input
+                  type="date"
+                  value={editForm.last_date_insemination || ""}
+                  onChange={(e) => handleEditFormChange("last_date_insemination", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Bull/Semen ID</label>
+                <input
+                  type="text"
+                  value={editForm.id_or_breed_bull_used || ""}
+                  onChange={(e) => handleEditFormChange("id_or_breed_bull_used", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">Last Calving Date</label>
+                <input
+                  type="date"
+                  value={editForm.last_calving_date || ""}
+                  onChange={(e) => handleEditFormChange("last_calving_date", e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-violet-500 focus:border-violet-500"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-200 dark:border-slate-700">
+          <Button
+            variant="outline"
+            onClick={() => setIsEditModalOpen(false)}
+            disabled={isSaving}
+          >
+            <X className="h-4 w-4 mr-2" /> Cancel
+          </Button>
+          <Button
+            onClick={handleSaveEdit}
+            disabled={isSaving}
+            className="bg-violet-600 hover:bg-violet-700 text-white"
+          >
+            {isSaving ? (
+              <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+            ) : (
+              <><Save className="h-4 w-4 mr-2" /> Save Changes</>
+            )}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
