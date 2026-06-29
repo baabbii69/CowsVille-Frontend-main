@@ -752,7 +752,12 @@ export default function CowDetails() {
       average_daily_milk: cow.average_daily_milk ?? 0,
       cow_inseminated_before: cow.cow_inseminated_before ?? false,
       is_pregnant: cow.status === "Pregnant" || false,
-      last_date_insemination: cow.last_date_insemination || "",
+      // Pre-populate from the latest reproduction record's heat_sign_start (date portion only)
+      last_date_insemination: reproRecords && reproRecords.length > 0
+        ? (reproRecords[0]?.heat_sign_start
+            ? reproRecords[0].heat_sign_start.split("T")[0]
+            : "")
+        : "",
       number_of_inseminations: cow.number_of_inseminations ?? 0,
       id_or_breed_bull_used: cow.id_or_breed_bull_used || "",
       last_calving_date: cow.last_calving_date || "",
@@ -818,7 +823,8 @@ export default function CowDetails() {
 
       // --- Date fields: send as string or null ---
       payload.date_of_birth = editForm.date_of_birth || null;
-      payload.last_date_insemination = editForm.last_date_insemination || null;
+      // NOTE: last_date_insemination is intentionally NOT sent in the PATCH payload.
+      // Instead, it is written to heat_sign_start on the Reproduction model (see below).
       payload.last_calving_date = editForm.last_calving_date || null;
 
       // --- String fields ---
@@ -833,31 +839,47 @@ export default function CowDetails() {
 
       await CowService.update(cow.id, payload);
 
-      // --- Frontend Fix for Pregnancy Status ---
-      // Backend PATCH update currently does not update pregnancy status (it's a side-effect in create only).
-      // We manually create a reproduction record if the status has changed.
+      // --- Reproduction Record Side Effects ---
+      // Collect changes that need to go to the Reproduction model.
+      const farmPk = typeof cow.farm === "object" ? (cow.farm as any).id : cow.farm;
+      const reproPayload: Record<string, any> = {
+        farm: farmPk,
+        cow: cow.id,
+      };
+      let needsReproRecord = false;
+
+      // 1. Last Insemination Date -> heat_sign_start
+      const originalHeatSignStart = reproRecords && reproRecords.length > 0
+        ? (reproRecords[0]?.heat_sign_start?.split("T")[0] || "")
+        : "";
+      const newHeatSignStart = editForm.last_date_insemination || "";
+      if (newHeatSignStart && newHeatSignStart !== originalHeatSignStart) {
+        // Backend expects a datetime string (ISO 8601). Append midnight UTC.
+        reproPayload.heat_sign_start = `${newHeatSignStart}T00:00:00Z`;
+        needsReproRecord = true;
+        console.log(`[CowEdit] heat_sign_start changed: ${originalHeatSignStart} -> ${newHeatSignStart}`);
+      }
+
+      // 2. Pregnancy status
       const isOriginallyPregnant = cow.status === "Pregnant" || (reproRecords && reproRecords.some((r: any) => r.is_cow_pregnant));
       const newIsPregnant = editForm.is_pregnant;
-
       if (newIsPregnant !== undefined && newIsPregnant !== isOriginallyPregnant) {
+        reproPayload.is_cow_pregnant = newIsPregnant;
+        if (newIsPregnant) {
+          reproPayload.pregnancy_date = new Date().toISOString().split('T')[0];
+        }
+        needsReproRecord = true;
+        console.log(`[CowEdit] Pregnancy status changed to ${newIsPregnant}.`);
+      }
+
+      if (needsReproRecord) {
         try {
-          console.log(`[CowEdit] Pregnancy status changed to ${newIsPregnant}. Creating reproduction record...`);
-          // Note: Reproduction model requires FK IDs (integers), not string IDs.
-          // cow.farm should be the Farm PK (integer) from the read serializer.
-          // cow.id is the Cow PK (integer).
-          await CowService.createReproductionRecord({
-            farm: typeof cow.farm === "object" ? (cow.farm as any).id : cow.farm,
-            cow: cow.id,
-            is_cow_pregnant: newIsPregnant,
-            // If becoming pregnant, optionally set date. For now, leave blank or implementation choice.
-            // If setting to 'no', is_cow_pregnant: false is sufficient.
-            pregnancy_date: newIsPregnant ? new Date().toISOString().split('T')[0] : null
-          });
+          console.log("[CowEdit] Creating reproduction record:", reproPayload);
+          await CowService.createReproductionRecord(reproPayload);
           console.log("[CowEdit] Reproduction record created successfully.");
         } catch (reproError) {
           console.error("[CowEdit] Failed to create reproduction record:", reproError);
-          // Don't block the UI flow, just log it. The main update succeeded.
-          toast({ type: "error", title: "Warning", message: "Cow updated, but pregnancy record creation failed." });
+          toast({ type: "error", title: "Warning", message: "Cow updated, but reproduction record creation failed." });
         }
       }
 
